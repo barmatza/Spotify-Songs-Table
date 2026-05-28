@@ -38,7 +38,7 @@
         .search-container {
             display: flex;
             gap: 10px;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
             width: 100%;
             max-width: 600px;
         }
@@ -61,15 +61,55 @@
             background-color: #1ed760;
         }
         button.ai-btn {
-            background-color: #8A2BE2; /* Distinct color for AI */
+            background-color: #8A2BE2; 
         }
         button.ai-btn:hover {
             background-color: #9b4dca;
         }
+        button.secondary-btn {
+            background-color: #333;
+            padding: 6px 12px;
+            font-size: 0.85em;
+        }
+        button.secondary-btn:hover {
+            background-color: #444;
+        }
+        button:disabled {
+            background-color: #555 !important;
+            cursor: not-allowed;
+        }
+        .status-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
         #status {
             color: #b3b3b3;
             font-size: 0.9em;
-            margin-bottom: 10px;
+            transition: color 0.3s;
+        }
+        #timer {
+            font-family: monospace;
+            background-color: #282828;
+            color: #1ed760;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            font-weight: bold;
+        }
+        .selection-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #333;
+        }
+        #selection-count {
+            color: #1ed760;
+            font-weight: bold;
+            font-size: 0.9em;
         }
         table {
             width: 100%;
@@ -96,32 +136,12 @@
             vertical-align: middle;
             margin-right: 15px;
         }
-        .selection-bar {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 15px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #333;
-        }
-        #selection-count {
-            color: #1ed760;
-            font-weight: bold;
-            font-size: 0.9em;
-        }
+        /* Checkbox styling */
         input[type="checkbox"] {
             width: 18px;
             height: 18px;
             cursor: pointer;
             accent-color: #1DB954;
-        }
-        button.secondary-btn {
-            background-color: #333;
-            padding: 6px 12px;
-            font-size: 0.85em;
-        }
-        button.secondary-btn:hover {
-            background-color: #444;
         }
         .hidden {
             display: none !important;
@@ -149,7 +169,10 @@
             <button id="login-btn">Connect with Spotify</button>
         </div>
 
-        <div id="status">Please enter your credentials and log in.</div>
+        <div class="status-wrapper">
+            <div id="status">Please enter your credentials and log in.</div>
+            <div id="timer" class="hidden">0.0s</div>
+        </div>
 
         <div id="search-container" class="search-container hidden">
             <input type="search" id="search-input" placeholder="Standard text filter or AI prompt...">
@@ -214,20 +237,44 @@
         const table = document.getElementById('songs-table');
         const tbody = document.getElementById('songs-body');
 
-        // Helper functions
+        // ==========================================
+        // TIMER LOGIC
+        // ==========================================
+        let loadingInterval;
+        let startTime;
+
+        function startTimer() {
+            timerBadge.classList.remove('hidden');
+            timerBadge.innerText = '0.0s';
+            startTime = Date.now();
+            
+            loadingInterval = setInterval(() => {
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                timerBadge.innerText = `${elapsed}s`;
+            }, 100);
+        }
+
+        function stopTimer() {
+            clearInterval(loadingInterval);
+            timerBadge.classList.add('hidden');
+        }
+
+        function setStatus(message, isError = false) {
+            statusText.innerText = message;
+            statusText.style.color = isError ? "#ff4444" : "#b3b3b3";
+            if (isError) {
+                setTimeout(() => { statusText.style.color = "#b3b3b3"; }, 5000);
+            }
+        }
+
         function updateSelectionCount() {
             const selectedCount = allFetchedSongs.filter(s => s.selected).length;
             selectionCountText.innerText = `${selectedCount} song${selectedCount !== 1 ? 's' : ''} selected`;
         }
 
-        function mapSongsWithSelection(songs) {
-            return songs.map(s => ({ ...s, selected: s.selected || false }));
-        }
-
         // ==========================================
         // PKCE CRYPTOGRAPHIC HELPERS
         // ==========================================
-        
         const generateRandomString = (length) => {
             const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
             const values = crypto.getRandomValues(new Uint8Array(length));
@@ -250,7 +297,6 @@
         // ==========================================
         // POPUP & AUTHENTICATION HANDLING
         // ==========================================
-        
         const urlParams = new URLSearchParams(window.location.search);
         let code = urlParams.get('code');
         
@@ -261,7 +307,8 @@
 
         window.addEventListener('message', async (event) => {
             if (event.data && event.data.type === 'spotify-auth-code') {
-                statusText.innerText = "Authenticating...";
+                setStatus("Authenticating...");
+                startTimer();
                 await exchangeToken(event.data.code);
             }
         });
@@ -327,16 +374,23 @@
                 localStorage.removeItem('code_verifier');
                 setupSection.classList.add('hidden');
                 clearCacheBtn.classList.remove('hidden');
+                
                 initApp();
             } catch (error) {
                 console.error(error);
-                statusText.innerText = "Authentication failed. Please check your Client ID and try again.";
+                stopTimer();
+                setStatus("Authentication failed. Please check your Client ID and try again.", true);
             }
         }
 
         // ==========================================
         // CORE LOGIC & DATA FETCHING
         // ==========================================
+
+        // Helper to ensure cached songs get the new "selected" property if they didn't have it
+        function mapSongsWithSelection(songs) {
+            return songs.map(s => ({ ...s, selected: s.selected || false }));
+        }
 
         async function initApp() {
             if (geminiKeyInput.value) {
@@ -401,40 +455,27 @@
                     allSongs = allSongs.concat(formattedSongs);
                     nextUrl = data.next; 
                     count += formattedSongs.length;
-                    statusText.innerText = `Fetching... (${count} retrieved)`;
+                    setStatus(`Fetching... (${count} retrieved)`);
                 }
                 return allSongs;
             } catch (error) {
                 console.error(error);
-                statusText.innerText = "Error fetching songs. Token may have expired.";
+                setStatus("Error fetching songs. Token may have expired.", true);
                 return [];
             }
         }
 
         // ==========================================
-        // FILTERING: STANDARD & AI
-        // ==========================================
-
-        // Standard Text Filter (Real-time)
-        searchInput.addEventListener('input', (event) => {
-            const query = event.target.value.toLowerCase();
-            const filteredSongs = allFetchedSongs.filter(song => {
-                return song.name.toLowerCase().includes(query) || 
-                       song.artist.toLowerCase().includes(query) || 
-                       song.album.toLowerCase().includes(query);
-            });
-            renderTable(filteredSongs);
-        });
-
-        // AI Semantic Filter (Click Triggered)
-        // ==========================================
         // SELECTION LOGIC
         // ==========================================
+
+        // Listen for checkbox clicks on the table body (Event Delegation)
         tbody.addEventListener('change', (event) => {
             if (event.target.classList.contains('song-checkbox')) {
                 const songId = event.target.getAttribute('data-id');
                 const isChecked = event.target.checked;
                 
+                // Find the song in the master list and update its status
                 const song = allFetchedSongs.find(s => s.id === songId);
                 if (song) song.selected = isChecked;
                 
@@ -443,11 +484,13 @@
         });
 
         selectAllBtn.addEventListener('click', () => {
+            // Only select the songs currently displayed in the table 
+            // (useful if they filter via text, then hit 'select all')
             currentlyDisplayedSongs.forEach(song => {
                 const masterSong = allFetchedSongs.find(s => s.id === song.id);
                 if (masterSong) masterSong.selected = true;
             });
-            renderTable(currentlyDisplayedSongs); 
+            renderTable(currentlyDisplayedSongs); // Re-render to check the boxes visually
             updateSelectionCount();
         });
 
@@ -460,6 +503,7 @@
         // ==========================================
         // FILTERING: STANDARD & AI
         // ==========================================
+
         searchInput.addEventListener('input', (event) => {
             const query = event.target.value.toLowerCase();
             const filteredSongs = allFetchedSongs.filter(song => {
@@ -484,7 +528,7 @@
                 return;
             }
             if (!geminiKey) {
-                alert("Please enter a Gemini API Key.");
+                alert("Please enter a Gemini API Key at the top of the page.");
                 return;
             }
 
@@ -494,6 +538,7 @@
             startTimer();
 
             try {
+                // Map only the SELECTED songs to save tokens
                 const minimizedSongs = selectedSongs.map(s => ({
                     id: s.id,
                     name: s.name,
@@ -503,8 +548,10 @@
 
                 const prompt = `You are a music librarian API. I will provide a JSON array of songs in a user's library.
                 The user has requested to filter this library based on the following criteria: "${query}".
+                
                 Your task: Return a raw JSON array of ONLY the string IDs of the songs that match or fit the vibe of this criteria. 
                 Do not include markdown blocks like \`\`\`json. Return ONLY the raw array [ "id1", "id2" ].
+                
                 Song Library:
                 ${JSON.stringify(minimizedSongs)}`;
 
@@ -517,22 +564,30 @@
                     })
                 });
 
-                if (!response.ok) throw new Error("Google API rejected the request. Check console.");
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    console.error("Detailed Gemini Error:", errorData);
+                    const errorMessage = errorData.error?.message || "Unknown API Error. Check console.";
+                    throw new Error(`Google API said: ${errorMessage}`);
+                }
 
                 const data = await response.json();
                 let resultText = data.candidates[0].content.parts[0].text;
+                
                 resultText = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
                 
                 const matchingIds = JSON.parse(resultText);
+
                 if (!Array.isArray(matchingIds)) throw new Error("AI did not return a valid array of IDs.");
 
+                // Show only the selected songs that the AI confirmed
                 const filteredSongs = selectedSongs.filter(song => matchingIds.includes(song.id));
                 
                 renderTable(filteredSongs);
                 setStatus(`Gemini found ${filteredSongs.length} matches out of the ${selectedSongs.length} songs you selected.`);
 
             } catch (error) {
-                console.error(error);
+                console.error("Full caught error:", error);
                 setStatus(`AI Filter Failed - ${error.message}`, true);
             } finally {
                 stopTimer();
@@ -547,13 +602,12 @@
             setStatus("Showing all songs.");
         });
 
-
         // ==========================================
         // UI RENDERING & INITIALIZATION
         // ==========================================
 
         function renderTable(songs) {
-            currentlyDisplayedSongs = songs; 
+            currentlyDisplayedSongs = songs; // Track what is actively on the screen
             tbody.innerHTML = ''; 
             
             songs.forEach((song, index) => {
@@ -587,17 +641,20 @@
             localStorage.removeItem(GEMINI_KEY_KEY);
             accessToken = null;
             allFetchedSongs = [];
+            currentlyDisplayedSongs = [];
             
             tbody.innerHTML = '';
             table.classList.add('hidden');
             searchContainer.classList.add('hidden');
+            selectionBar.classList.add('hidden');
             searchInput.value = ''; 
             setupSection.classList.remove('hidden');
             clearCacheBtn.classList.add('hidden');
             clientIdInput.value = '';
             geminiKeyInput.value = '';
             
-            statusText.innerText = "Cache and credentials cleared. Please enter credentials to start over.";
+            stopTimer();
+            setStatus("Cache and credentials cleared. Please enter credentials to start over.");
         });
 
         window.addEventListener('DOMContentLoaded', () => {
