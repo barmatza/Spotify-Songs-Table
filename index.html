@@ -109,6 +109,10 @@
             color: #1DB954; border-bottom: 2px solid #1DB954; 
         }
         .tab-btn:hover:not(.active) { color: white; }
+        .close-tab-btn {
+            background: none; border: none; color: #ff4444; margin-left: 8px; cursor: pointer; font-size: 14px; padding: 0;
+        }
+        .close-tab-btn:hover { color: #ff0000; }
         .toggle-btn { 
             background-color: #333; padding: 6px 12px; font-size: 0.85em; border-radius: 4px; border: 1px solid #555; color: white; cursor: pointer; 
         }
@@ -195,10 +199,11 @@
             <button id="tab-ai" class="tab-btn hidden">AI Results <span id="ai-badge"></span></button>
         </div>
 
-        <div id="search-container" class="search-container hidden">
+       <div id="search-container" class="search-container hidden" style="flex-wrap: wrap; max-width: 800px;">
             <input type="search" id="search-input" placeholder="Standard text filter or AI prompt...">
             <button id="ai-filter-btn" class="ai-btn">Filter with AI</button>
             <button id="reset-filter-btn" style="background-color: #333;">Reset Filters</button>
+            <button id="save-tab-btn" class="secondary-btn" style="background-color: #007bff;">Save View to New Tab</button>
         </div>
 
         <div id="selection-bar" class="selection-bar hidden">
@@ -238,9 +243,11 @@
         let allFetchedSongs = []; 
         let aiFilteredSongs = []; // Stores AI results separately
         let currentlyDisplayedSongs = []; 
+        let customTabs = []; // Array to store user-created tabs
+        let customTabCounter = 0;
         
         // View States
-        let currentTab = 'main'; // 'main' or 'ai'
+        let currentTab = 'main'; // 'main', 'ai', or custom id
         let showingSelectedOnly = false;
 
         // DOM Elements
@@ -261,6 +268,7 @@
         const searchInput = document.getElementById('search-input');
         const aiFilterBtn = document.getElementById('ai-filter-btn');
         const resetFilterBtn = document.getElementById('reset-filter-btn');
+        const saveTabBtn = document.getElementById('save-tab-btn');
         
         const selectionBar = document.getElementById('selection-bar');
         const selectAllBtn = document.getElementById('select-all-btn');
@@ -276,7 +284,13 @@
         // ==========================================
         function updateView() {
             // 1. Pick the base list depending on the active tab
-            let baseList = currentTab === 'main' ? allFetchedSongs : aiFilteredSongs;
+            let baseList = allFetchedSongs;
+            if (currentTab === 'ai') {
+                baseList = aiFilteredSongs;
+            } else if (currentTab.startsWith('custom-')) {
+                const tab = customTabs.find(t => t.id === currentTab);
+                if (tab) baseList = tab.songs;
+            }
 
             // 2. Apply text filter if any
             const query = searchInput.value.trim().toLowerCase();
@@ -564,18 +578,81 @@
             updateView();
         });
 
-        tabMain.addEventListener('click', () => {
-            currentTab = 'main';
-            tabMain.classList.add('active');
-            tabAi.classList.remove('active');
+        // Tab Management System
+        function switchTab(tabId) {
+            currentTab = tabId;
+            
+            // Update UI active states
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                if (btn.id === `tab-${tabId}` || (tabId === 'main' && btn.id === 'tab-main') || (tabId === 'ai' && btn.id === 'tab-ai')) {
+                    btn.classList.add('active');
+                } else {
+                    btn.classList.remove('active');
+                }
+            });
+            
+            // Clear text search when swapping tabs for a fresh view
+            searchInput.value = ''; 
             updateView();
-        });
+        }
 
-        tabAi.addEventListener('click', () => {
-            currentTab = 'ai';
-            tabAi.classList.add('active');
-            tabMain.classList.remove('active');
-            updateView();
+        function closeCustomTab(tabId) {
+            customTabs = customTabs.filter(t => t.id !== tabId);
+            const btn = document.getElementById(`tab-${tabId}`);
+            if (btn) btn.remove();
+            
+            if (currentTab === tabId) {
+                switchTab('main'); // Revert to main if closing active tab
+            }
+        }
+
+        tabMain.addEventListener('click', () => switchTab('main'));
+        tabAi.addEventListener('click', () => switchTab('ai'));
+
+        saveTabBtn.addEventListener('click', () => {
+            if (currentlyDisplayedSongs.length === 0) {
+                alert("There are no songs currently displayed to save.");
+                return;
+            }
+            
+            customTabCounter++;
+            const tabId = `custom-${customTabCounter}`;
+            let tabName = searchInput.value.trim();
+            
+            // Auto-generate a name if the search bar is empty
+            if (!tabName) {
+                if (currentTab === 'ai') tabName = 'AI Results (Saved)';
+                else if (showingSelectedOnly) tabName = 'Selected Songs';
+                else tabName = `Saved View ${customTabCounter}`;
+            }
+
+            // Snapshot the currently displayed list
+            const newTab = {
+                id: tabId,
+                name: tabName,
+                songs: [...currentlyDisplayedSongs] 
+            };
+            customTabs.push(newTab);
+
+            // Create tab button HTML
+            const tabBtn = document.createElement('button');
+            tabBtn.className = 'tab-btn';
+            tabBtn.id = `tab-${tabId}`;
+            tabBtn.innerHTML = `${tabName} <span style="font-size: 0.8em; color: #888;">(${newTab.songs.length})</span> <span class="close-tab-btn" data-id="${tabId}">✖</span>`;
+            
+            // Listeners for clicking the tab or the 'X' button
+            tabBtn.addEventListener('click', (e) => {
+                if (e.target.classList.contains('close-tab-btn')) {
+                    e.stopPropagation();
+                    closeCustomTab(e.target.getAttribute('data-id'));
+                    return;
+                }
+                switchTab(tabId);
+            });
+
+            tabsContainer.appendChild(tabBtn);
+            switchTab(tabId);
+            setStatus(`Created new tab: ${tabName}`);
         });
 
         // ==========================================
@@ -650,11 +727,7 @@
                 tabAi.classList.remove('hidden');
                 aiBadge.innerText = `(${filteredSongs.length})`;
 
-                currentTab = 'ai';
-                tabAi.classList.add('active');
-                tabMain.classList.remove('active');
-                
-                updateView();
+                switchTab('ai'); // Replaced the manual active class juggling with the new switchTab helper
                 setStatus(`Gemini found ${filteredSongs.length} matches out of the ${selectedSongs.length} songs you selected.`);
 
             } catch (error) {
@@ -716,9 +789,16 @@
             allFetchedSongs = [];
             currentlyDisplayedSongs = [];
             aiFilteredSongs = [];
-            currentTab = 'main';
-            tabMain.classList.add('active');
-            tabAi.classList.remove('active', 'hidden');
+            customTabs = [];
+            customTabCounter = 0;
+            
+            // Remove dynamically generated custom tabs from the UI
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                if (btn.id !== 'tab-main' && btn.id !== 'tab-ai') btn.remove();
+            });
+            
+            switchTab('main');
+            tabAi.classList.add('hidden'); // Hide AI tab on full reset
             
             tbody.innerHTML = '';
             table.classList.add('hidden');
