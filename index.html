@@ -98,6 +98,23 @@
             font-size: 0.9em;
             font-weight: bold;
         }
+        /* Tab & Toggle Styles */
+        .tabs { 
+            display: flex; gap: 15px; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px; 
+        }
+        .tab-btn { 
+            background-color: transparent; color: #b3b3b3; border: none; font-size: 16px; font-weight: bold; cursor: pointer; padding: 5px 10px; border-radius: 0;
+        }
+        .tab-btn.active { 
+            color: #1DB954; border-bottom: 2px solid #1DB954; 
+        }
+        .tab-btn:hover:not(.active) { color: white; }
+        .toggle-btn { 
+            background-color: #333; padding: 6px 12px; font-size: 0.85em; border-radius: 4px; border: 1px solid #555; color: white; cursor: pointer; 
+        }
+        .toggle-btn.active { 
+            background-color: #1DB954; color: white; border-color: #1DB954; 
+        }
         .selection-bar {
             display: flex;
             align-items: center;
@@ -136,7 +153,6 @@
             vertical-align: middle;
             margin-right: 15px;
         }
-        /* Checkbox styling */
         input[type="checkbox"] {
             width: 18px;
             height: 18px;
@@ -174,15 +190,21 @@
             <div id="timer" class="hidden">0.0s</div>
         </div>
 
+        <div id="tabs-container" class="tabs hidden">
+            <button id="tab-main" class="tab-btn active">Main Library</button>
+            <button id="tab-ai" class="tab-btn hidden">AI Results <span id="ai-badge"></span></button>
+        </div>
+
         <div id="search-container" class="search-container hidden">
             <input type="search" id="search-input" placeholder="Standard text filter or AI prompt...">
             <button id="ai-filter-btn" class="ai-btn">Filter with AI</button>
-            <button id="reset-filter-btn" style="background-color: #333;">Reset Table</button>
+            <button id="reset-filter-btn" style="background-color: #333;">Reset Filters</button>
         </div>
 
         <div id="selection-bar" class="selection-bar hidden">
             <button id="select-all-btn" class="secondary-btn">Select All</button>
             <button id="select-none-btn" class="secondary-btn">Deselect All</button>
+            <button id="view-selected-btn" class="toggle-btn">Show Selected Only</button>
             <span id="selection-count">0 songs selected</span>
         </div>
     </div>
@@ -214,7 +236,12 @@
         
         let accessToken = null;
         let allFetchedSongs = []; 
-        let currentlyDisplayedSongs = []; // Tracks what is currently visible
+        let aiFilteredSongs = []; // Stores AI results separately
+        let currentlyDisplayedSongs = []; 
+        
+        // View States
+        let currentTab = 'main'; // 'main' or 'ai'
+        let showingSelectedOnly = false;
 
         // DOM Elements
         const clientIdInput = document.getElementById('client-id-input');
@@ -224,6 +251,12 @@
         const clearCacheBtn = document.getElementById('clear-cache-btn');
         const statusText = document.getElementById('status');
         const timerBadge = document.getElementById('timer');
+        
+        const tabsContainer = document.getElementById('tabs-container');
+        const tabMain = document.getElementById('tab-main');
+        const tabAi = document.getElementById('tab-ai');
+        const aiBadge = document.getElementById('ai-badge');
+
         const searchContainer = document.getElementById('search-container');
         const searchInput = document.getElementById('search-input');
         const aiFilterBtn = document.getElementById('ai-filter-btn');
@@ -232,10 +265,46 @@
         const selectionBar = document.getElementById('selection-bar');
         const selectAllBtn = document.getElementById('select-all-btn');
         const selectNoneBtn = document.getElementById('select-none-btn');
+        const viewSelectedBtn = document.getElementById('view-selected-btn');
         const selectionCountText = document.getElementById('selection-count');
         
         const table = document.getElementById('songs-table');
         const tbody = document.getElementById('songs-body');
+
+        // ==========================================
+        // MASTER VIEW ENGINE
+        // ==========================================
+        function updateView() {
+            // 1. Pick the base list depending on the active tab
+            let baseList = currentTab === 'main' ? allFetchedSongs : aiFilteredSongs;
+
+            // 2. Apply text filter if any
+            const query = searchInput.value.trim().toLowerCase();
+            if (query) {
+                baseList = baseList.filter(song =>
+                    song.name.toLowerCase().includes(query) || 
+                    song.artist.toLowerCase().includes(query) || 
+                    song.album.toLowerCase().includes(query)
+                );
+            }
+
+            // 3. Apply "Selected Only" toggle if active
+            if (showingSelectedOnly) {
+                baseList = baseList.filter(song => song.selected);
+            }
+
+            renderTable(baseList);
+            updateSelectionCount();
+        }
+
+        function updateSelectionCount() {
+            const selectedCount = allFetchedSongs.filter(s => s.selected).length;
+            selectionCountText.innerText = `${selectedCount} song${selectedCount !== 1 ? 's' : ''} selected`;
+        }
+
+        function mapSongsWithSelection(songs) {
+            return songs.map(s => ({ ...s, selected: s.selected || false }));
+        }
 
         // ==========================================
         // TIMER LOGIC
@@ -265,11 +334,6 @@
             if (isError) {
                 setTimeout(() => { statusText.style.color = "#b3b3b3"; }, 5000);
             }
-        }
-
-        function updateSelectionCount() {
-            const selectedCount = allFetchedSongs.filter(s => s.selected).length;
-            selectionCountText.innerText = `${selectedCount} song${selectedCount !== 1 ? 's' : ''} selected`;
         }
 
         // ==========================================
@@ -386,12 +450,6 @@
         // ==========================================
         // CORE LOGIC & DATA FETCHING
         // ==========================================
-
-        // Helper to ensure cached songs get the new "selected" property if they didn't have it
-        function mapSongsWithSelection(songs) {
-            return songs.map(s => ({ ...s, selected: s.selected || false }));
-        }
-
         async function initApp() {
             if (geminiKeyInput.value) {
                 localStorage.setItem(GEMINI_KEY_KEY, geminiKeyInput.value.trim());
@@ -423,7 +481,8 @@
             if (allFetchedSongs.length > 0) {
                 searchContainer.classList.remove('hidden');
                 selectionBar.classList.remove('hidden');
-                updateSelectionCount();
+                tabsContainer.classList.remove('hidden');
+                updateView(); 
             }
         }
 
@@ -449,7 +508,7 @@
                         artist: item.track.artists.map(a => a.name).join(', '),
                         album: item.track.album.name,
                         image: item.track.album.images[2]?.url || '',
-                        selected: false // Initialize all as unselected
+                        selected: false
                     }));
 
                     allSongs = allSongs.concat(formattedSongs);
@@ -466,16 +525,13 @@
         }
 
         // ==========================================
-        // SELECTION LOGIC
+        // SELECTION LOGIC & TABS
         // ==========================================
-
-        // Listen for checkbox clicks on the table body (Event Delegation)
         tbody.addEventListener('change', (event) => {
             if (event.target.classList.contains('song-checkbox')) {
                 const songId = event.target.getAttribute('data-id');
                 const isChecked = event.target.checked;
                 
-                // Find the song in the master list and update its status
                 const song = allFetchedSongs.find(s => s.id === songId);
                 if (song) song.selected = isChecked;
                 
@@ -484,35 +540,48 @@
         });
 
         selectAllBtn.addEventListener('click', () => {
-            // Only select the songs currently displayed in the table 
-            // (useful if they filter via text, then hit 'select all')
             currentlyDisplayedSongs.forEach(song => {
                 const masterSong = allFetchedSongs.find(s => s.id === song.id);
                 if (masterSong) masterSong.selected = true;
             });
-            renderTable(currentlyDisplayedSongs); // Re-render to check the boxes visually
-            updateSelectionCount();
+            updateView(); 
         });
 
         selectNoneBtn.addEventListener('click', () => {
             allFetchedSongs.forEach(song => song.selected = false);
-            renderTable(currentlyDisplayedSongs); 
-            updateSelectionCount();
+            updateView(); 
+        });
+
+        viewSelectedBtn.addEventListener('click', () => {
+            showingSelectedOnly = !showingSelectedOnly;
+            if (showingSelectedOnly) {
+                viewSelectedBtn.classList.add('active');
+                viewSelectedBtn.innerText = "Showing Selected Only";
+            } else {
+                viewSelectedBtn.classList.remove('active');
+                viewSelectedBtn.innerText = "Show Selected Only";
+            }
+            updateView();
+        });
+
+        tabMain.addEventListener('click', () => {
+            currentTab = 'main';
+            tabMain.classList.add('active');
+            tabAi.classList.remove('active');
+            updateView();
+        });
+
+        tabAi.addEventListener('click', () => {
+            currentTab = 'ai';
+            tabAi.classList.add('active');
+            tabMain.classList.remove('active');
+            updateView();
         });
 
         // ==========================================
         // FILTERING: STANDARD & AI
         // ==========================================
-
-        searchInput.addEventListener('input', (event) => {
-            const query = event.target.value.toLowerCase();
-            const filteredSongs = allFetchedSongs.filter(song => {
-                return song.name.toLowerCase().includes(query) || 
-                       song.artist.toLowerCase().includes(query) || 
-                       song.album.toLowerCase().includes(query);
-            });
-            renderTable(filteredSongs);
-        });
+        searchInput.addEventListener('input', updateView);
 
         aiFilterBtn.addEventListener('click', async () => {
             const query = searchInput.value.trim();
@@ -528,7 +597,7 @@
                 return;
             }
             if (!geminiKey) {
-                alert("Please enter a Gemini API Key at the top of the page.");
+                alert("Please enter a Gemini API Key.");
                 return;
             }
 
@@ -538,7 +607,6 @@
             startTimer();
 
             try {
-                // Map only the SELECTED songs to save tokens
                 const minimizedSongs = selectedSongs.map(s => ({
                     id: s.id,
                     name: s.name,
@@ -548,10 +616,8 @@
 
                 const prompt = `You are a music librarian API. I will provide a JSON array of songs in a user's library.
                 The user has requested to filter this library based on the following criteria: "${query}".
-                
                 Your task: Return a raw JSON array of ONLY the string IDs of the songs that match or fit the vibe of this criteria. 
                 Do not include markdown blocks like \`\`\`json. Return ONLY the raw array [ "id1", "id2" ].
-                
                 Song Library:
                 ${JSON.stringify(minimizedSongs)}`;
 
@@ -573,21 +639,26 @@
 
                 const data = await response.json();
                 let resultText = data.candidates[0].content.parts[0].text;
-                
                 resultText = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
                 
                 const matchingIds = JSON.parse(resultText);
-
                 if (!Array.isArray(matchingIds)) throw new Error("AI did not return a valid array of IDs.");
 
-                // Show only the selected songs that the AI confirmed
                 const filteredSongs = selectedSongs.filter(song => matchingIds.includes(song.id));
                 
-                renderTable(filteredSongs);
+                aiFilteredSongs = filteredSongs;
+                tabAi.classList.remove('hidden');
+                aiBadge.innerText = `(${filteredSongs.length})`;
+
+                currentTab = 'ai';
+                tabAi.classList.add('active');
+                tabMain.classList.remove('active');
+                
+                updateView();
                 setStatus(`Gemini found ${filteredSongs.length} matches out of the ${selectedSongs.length} songs you selected.`);
 
             } catch (error) {
-                console.error("Full caught error:", error);
+                console.error(error);
                 setStatus(`AI Filter Failed - ${error.message}`, true);
             } finally {
                 stopTimer();
@@ -598,16 +669,18 @@
 
         resetFilterBtn.addEventListener('click', () => {
             searchInput.value = '';
-            renderTable(allFetchedSongs);
-            setStatus("Showing all songs.");
+            showingSelectedOnly = false;
+            viewSelectedBtn.classList.remove('active');
+            viewSelectedBtn.innerText = "Show Selected Only";
+            updateView();
+            setStatus("Filters reset.");
         });
 
         // ==========================================
-        // UI RENDERING & INITIALIZATION
+        // UI RENDERING
         // ==========================================
-
         function renderTable(songs) {
-            currentlyDisplayedSongs = songs; // Track what is actively on the screen
+            currentlyDisplayedSongs = songs; 
             tbody.innerHTML = ''; 
             
             songs.forEach((song, index) => {
@@ -642,11 +715,16 @@
             accessToken = null;
             allFetchedSongs = [];
             currentlyDisplayedSongs = [];
+            aiFilteredSongs = [];
+            currentTab = 'main';
+            tabMain.classList.add('active');
+            tabAi.classList.remove('active', 'hidden');
             
             tbody.innerHTML = '';
             table.classList.add('hidden');
             searchContainer.classList.add('hidden');
             selectionBar.classList.add('hidden');
+            tabsContainer.classList.add('hidden');
             searchInput.value = ''; 
             setupSection.classList.remove('hidden');
             clearCacheBtn.classList.add('hidden');
