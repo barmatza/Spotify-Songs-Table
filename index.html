@@ -197,9 +197,14 @@
         <div id="tabs-container" class="tabs hidden">
             <button id="tab-main" class="tab-btn active">Main Library</button>
             <button id="tab-ai" class="tab-btn hidden">AI Results <span id="ai-badge"></span></button>
+            <button id="tab-skipped" class="tab-btn hidden" style="color: #ff9800;">Unprocessed <span id="skipped-badge"></span></button>
         </div>
 
-       <div id="search-container" class="search-container hidden" style="flex-wrap: wrap; max-width: 800px;">
+        <div id="skipped-warning" class="hidden" style="background-color: #332b00; color: #ffb300; padding: 10px; border-radius: 4px; margin-bottom: 15px; border: 1px solid #ff9800; font-size: 0.9em;">
+            <strong>Rate Limit Reached:</strong> Gemini can only process a maximum of 2,500 songs per request (5 batches of 500). The songs below were excluded from the AI filter.
+        </div>
+
+        <div id="search-container" class="search-container hidden" style="flex-wrap: wrap; max-width: 800px;">
             <input type="search" id="search-input" placeholder="Standard text filter or AI prompt...">
             <button id="ai-filter-btn" class="ai-btn">Filter with AI</button>
             <button id="reset-filter-btn" style="background-color: #333;">Reset Filters</button>
@@ -241,9 +246,10 @@
         
         let accessToken = null;
         let allFetchedSongs = []; 
-        let aiFilteredSongs = []; // Stores AI results separately
+        let aiFilteredSongs = []; 
+        let skippedSongs = []; // NEW: Stores songs that exceeded the limit
         let currentlyDisplayedSongs = []; 
-        let customTabs = []; // Array to store user-created tabs
+        let customTabs = []; 
         let customTabCounter = 0;
         
         // View States
@@ -262,7 +268,10 @@
         const tabsContainer = document.getElementById('tabs-container');
         const tabMain = document.getElementById('tab-main');
         const tabAi = document.getElementById('tab-ai');
+        const tabSkipped = document.getElementById('tab-skipped');
         const aiBadge = document.getElementById('ai-badge');
+        const skippedBadge = document.getElementById('skipped-badge');
+        const skippedWarning = document.getElementById('skipped-warning');
 
         const searchContainer = document.getElementById('search-container');
         const searchInput = document.getElementById('search-input');
@@ -283,10 +292,15 @@
         // MASTER VIEW ENGINE
         // ==========================================
         function updateView() {
-            // 1. Pick the base list depending on the active tab
             let baseList = allFetchedSongs;
+            skippedWarning.classList.add('hidden'); // Hide warning by default
+
+            // 1. Pick the base list depending on the active tab
             if (currentTab === 'ai') {
                 baseList = aiFilteredSongs;
+            } else if (currentTab === 'skipped') {
+                baseList = skippedSongs;
+                skippedWarning.classList.remove('hidden'); // Show warning only on this tab
             } else if (currentTab.startsWith('custom-')) {
                 const tab = customTabs.find(t => t.id === currentTab);
                 if (tab) baseList = tab.songs;
@@ -582,9 +596,12 @@
         function switchTab(tabId) {
             currentTab = tabId;
             
-            // Update UI active states
+           // Update UI active states
             document.querySelectorAll('.tab-btn').forEach(btn => {
-                if (btn.id === `tab-${tabId}` || (tabId === 'main' && btn.id === 'tab-main') || (tabId === 'ai' && btn.id === 'tab-ai')) {
+                if (btn.id === `tab-${tabId}` || 
+                   (tabId === 'main' && btn.id === 'tab-main') || 
+                   (tabId === 'ai' && btn.id === 'tab-ai') || 
+                   (tabId === 'skipped' && btn.id === 'tab-skipped')) {
                     btn.classList.add('active');
                 } else {
                     btn.classList.remove('active');
@@ -608,6 +625,7 @@
 
         tabMain.addEventListener('click', () => switchTab('main'));
         tabAi.addEventListener('click', () => switchTab('ai'));
+        tabSkipped.addEventListener('click', () => switchTab('skipped'));
 
         saveTabBtn.addEventListener('click', () => {
             if (currentlyDisplayedSongs.length === 0) {
@@ -684,21 +702,32 @@
             startTimer();
 
             try {
-                const minimizedSongs = selectedSongs.map(s => ({
+                // === NEW LIMIT LOGIC ===
+                const MAX_SONGS_PER_CHUNK = 500;
+                const MAX_CHUNKS = 5;
+                const TOTAL_LIMIT = MAX_SONGS_PER_CHUNK * MAX_CHUNKS; // 2500 max songs
+
+                let songsToProcess = selectedSongs;
+                skippedSongs = []; // Clear previous skips
+
+                // Slice the array if it exceeds the limit
+                if (selectedSongs.length > TOTAL_LIMIT) {
+                    songsToProcess = selectedSongs.slice(0, TOTAL_LIMIT);
+                    skippedSongs = selectedSongs.slice(TOTAL_LIMIT);
+                }
+
+                const minimizedSongs = songsToProcess.map(s => ({
                     id: s.id,
                     name: s.name,
                     artist: s.artist,
                     album: s.album
                 }));
 
-                // 1. Chunk the array into batches of up to 500
-                const CHUNK_SIZE = 500;
                 const chunks = [];
-                for (let i = 0; i < minimizedSongs.length; i += CHUNK_SIZE) {
-                    chunks.push(minimizedSongs.slice(i, i + CHUNK_SIZE));
+                for (let i = 0; i < minimizedSongs.length; i += MAX_SONGS_PER_CHUNK) {
+                    chunks.push(minimizedSongs.slice(i, i + MAX_SONGS_PER_CHUNK));
                 }
 
-                // 2. Map each chunk to a fetch Promise (Fires asynchronously in parallel)
                 const fetchPromises = chunks.map(async (chunk, index) => {
                     const prompt = `You are a music librarian API. I will provide a JSON array of songs in a user's library.
                     The user has requested to filter this library based on the following criteria: "${query}".
@@ -734,24 +763,34 @@
                     return matchingIds;
                 });
 
-                // 3. Wait for all parallel requests to finish
                 const resultsArray = await Promise.all(fetchPromises);
-                
-                // 4. Flatten the arrays of IDs into one master list
                 const allMatchingIds = resultsArray.flat();
 
-                // 5. Filter the master list based on the combined IDs
-                const filteredSongs = selectedSongs.filter(song => allMatchingIds.includes(song.id));
+                // Match against the songs we ACTUALLY processed
+                const filteredSongs = songsToProcess.filter(song => allMatchingIds.includes(song.id));
                 
                 aiFilteredSongs = filteredSongs;
                 tabAi.classList.remove('hidden');
                 aiBadge.innerText = `(${filteredSongs.length})`;
 
-                switchTab('ai'); // Replaced the manual active class juggling with the new switchTab helper
-                setStatus(`Gemini found ${filteredSongs.length} matches out of the ${selectedSongs.length} songs you selected.`);
+                // Handle Skipped Songs Tab UI
+                if (skippedSongs.length > 0) {
+                    tabSkipped.classList.remove('hidden');
+                    skippedBadge.innerText = `(${skippedSongs.length})`;
+                } else {
+                    tabSkipped.classList.add('hidden');
+                }
+
+                switchTab('ai'); 
+                
+                if (skippedSongs.length > 0) {
+                    setStatus(`Gemini found ${filteredSongs.length} matches. ${skippedSongs.length} songs were skipped due to limits.`);
+                } else {
+                    setStatus(`Gemini found ${filteredSongs.length} matches out of the ${songsToProcess.length} songs you selected.`);
+                }
 
             } catch (error) {
-                console.error(error);
+                console.error("Full caught error:", error);
                 setStatus(`AI Filter Failed - ${error.message}`, true);
             } finally {
                 stopTimer();
@@ -809,6 +848,7 @@
             allFetchedSongs = [];
             currentlyDisplayedSongs = [];
             aiFilteredSongs = [];
+            skippedSongs = [];
             customTabs = [];
             customTabCounter = 0;
             
@@ -819,6 +859,7 @@
             
             switchTab('main');
             tabAi.classList.add('hidden'); // Hide AI tab on full reset
+            tabSkipped.classList.add('hidden');
             
             tbody.innerHTML = '';
             table.classList.add('hidden');
