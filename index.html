@@ -96,6 +96,33 @@
             vertical-align: middle;
             margin-right: 15px;
         }
+        .selection-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #333;
+        }
+        #selection-count {
+            color: #1ed760;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+        input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            cursor: pointer;
+            accent-color: #1DB954;
+        }
+        button.secondary-btn {
+            background-color: #333;
+            padding: 6px 12px;
+            font-size: 0.85em;
+        }
+        button.secondary-btn:hover {
+            background-color: #444;
+        }
         .hidden {
             display: none !important;
         }
@@ -127,13 +154,20 @@
         <div id="search-container" class="search-container hidden">
             <input type="search" id="search-input" placeholder="Standard text filter or AI prompt...">
             <button id="ai-filter-btn" class="ai-btn">Filter with AI</button>
-            <button id="reset-filter-btn" style="background-color: #333;">Reset</button>
+            <button id="reset-filter-btn" style="background-color: #333;">Reset Table</button>
+        </div>
+
+        <div id="selection-bar" class="selection-bar hidden">
+            <button id="select-all-btn" class="secondary-btn">Select All</button>
+            <button id="select-none-btn" class="secondary-btn">Deselect All</button>
+            <span id="selection-count">0 songs selected</span>
         </div>
     </div>
 
     <table id="songs-table" class="hidden">
         <thead>
             <tr>
+                <th>✔</th>
                 <th>#</th>
                 <th>Title</th>
                 <th>Album</th>
@@ -157,6 +191,7 @@
         
         let accessToken = null;
         let allFetchedSongs = []; 
+        let currentlyDisplayedSongs = []; // Tracks what is currently visible
 
         // DOM Elements
         const clientIdInput = document.getElementById('client-id-input');
@@ -165,12 +200,29 @@
         const loginBtn = document.getElementById('login-btn');
         const clearCacheBtn = document.getElementById('clear-cache-btn');
         const statusText = document.getElementById('status');
+        const timerBadge = document.getElementById('timer');
         const searchContainer = document.getElementById('search-container');
         const searchInput = document.getElementById('search-input');
         const aiFilterBtn = document.getElementById('ai-filter-btn');
         const resetFilterBtn = document.getElementById('reset-filter-btn');
+        
+        const selectionBar = document.getElementById('selection-bar');
+        const selectAllBtn = document.getElementById('select-all-btn');
+        const selectNoneBtn = document.getElementById('select-none-btn');
+        const selectionCountText = document.getElementById('selection-count');
+        
         const table = document.getElementById('songs-table');
         const tbody = document.getElementById('songs-body');
+
+        // Helper functions
+        function updateSelectionCount() {
+            const selectedCount = allFetchedSongs.filter(s => s.selected).length;
+            selectionCountText.innerText = `${selectedCount} song${selectedCount !== 1 ? 's' : ''} selected`;
+        }
+
+        function mapSongsWithSelection(songs) {
+            return songs.map(s => ({ ...s, selected: s.selected || false }));
+        }
 
         // ==========================================
         // PKCE CRYPTOGRAPHIC HELPERS
@@ -287,7 +339,6 @@
         // ==========================================
 
         async function initApp() {
-            // Re-save Gemini key if modified while cached
             if (geminiKeyInput.value) {
                 localStorage.setItem(GEMINI_KEY_KEY, geminiKeyInput.value.trim());
             }
@@ -295,22 +346,30 @@
             const cachedSongs = localStorage.getItem(CACHE_KEY);
             
             if (cachedSongs) {
-                statusText.innerText = "Loaded from cache.";
-                allFetchedSongs = JSON.parse(cachedSongs); 
+                stopTimer(); 
+                setStatus("Loaded from cache.");
+                allFetchedSongs = mapSongsWithSelection(JSON.parse(cachedSongs)); 
                 renderTable(allFetchedSongs);
             } else if (accessToken) {
-                statusText.innerText = "Fetching songs from Spotify... This might take a moment.";
+                if(timerBadge.classList.contains('hidden')) startTimer();
+                
+                setStatus("Fetching songs from Spotify... This might take a moment.");
                 const songs = await fetchAllLikedSongs();
+                
+                stopTimer();
+                
                 if (songs.length > 0) {
-                    localStorage.setItem(CACHE_KEY, JSON.stringify(songs));
-                    statusText.innerText = `Fetched ${songs.length} songs. Saved to cache.`;
-                    allFetchedSongs = songs; 
+                    allFetchedSongs = mapSongsWithSelection(songs);
+                    localStorage.setItem(CACHE_KEY, JSON.stringify(allFetchedSongs));
+                    setStatus(`Fetched ${allFetchedSongs.length} songs. Saved to cache.`);
                     renderTable(allFetchedSongs);
                 }
             }
             
             if (allFetchedSongs.length > 0) {
                 searchContainer.classList.remove('hidden');
+                selectionBar.classList.remove('hidden');
+                updateSelectionCount();
             }
         }
 
@@ -335,7 +394,8 @@
                         name: item.track.name,
                         artist: item.track.artists.map(a => a.name).join(', '),
                         album: item.track.album.name,
-                        image: item.track.album.images[2]?.url || '' 
+                        image: item.track.album.images[2]?.url || '',
+                        selected: false // Initialize all as unselected
                     }));
 
                     allSongs = allSongs.concat(formattedSongs);
@@ -367,26 +427,74 @@
         });
 
         // AI Semantic Filter (Click Triggered)
+        // ==========================================
+        // SELECTION LOGIC
+        // ==========================================
+        tbody.addEventListener('change', (event) => {
+            if (event.target.classList.contains('song-checkbox')) {
+                const songId = event.target.getAttribute('data-id');
+                const isChecked = event.target.checked;
+                
+                const song = allFetchedSongs.find(s => s.id === songId);
+                if (song) song.selected = isChecked;
+                
+                updateSelectionCount();
+            }
+        });
+
+        selectAllBtn.addEventListener('click', () => {
+            currentlyDisplayedSongs.forEach(song => {
+                const masterSong = allFetchedSongs.find(s => s.id === song.id);
+                if (masterSong) masterSong.selected = true;
+            });
+            renderTable(currentlyDisplayedSongs); 
+            updateSelectionCount();
+        });
+
+        selectNoneBtn.addEventListener('click', () => {
+            allFetchedSongs.forEach(song => song.selected = false);
+            renderTable(currentlyDisplayedSongs); 
+            updateSelectionCount();
+        });
+
+        // ==========================================
+        // FILTERING: STANDARD & AI
+        // ==========================================
+        searchInput.addEventListener('input', (event) => {
+            const query = event.target.value.toLowerCase();
+            const filteredSongs = allFetchedSongs.filter(song => {
+                return song.name.toLowerCase().includes(query) || 
+                       song.artist.toLowerCase().includes(query) || 
+                       song.album.toLowerCase().includes(query);
+            });
+            renderTable(filteredSongs);
+        });
+
         aiFilterBtn.addEventListener('click', async () => {
             const query = searchInput.value.trim();
             const geminiKey = localStorage.getItem(GEMINI_KEY_KEY) || geminiKeyInput.value.trim();
+            const selectedSongs = allFetchedSongs.filter(s => s.selected);
 
+            if (selectedSongs.length === 0) {
+                alert("Please select at least one song using the checkboxes before filtering with AI.\n\nTip: Click 'Select All' to search your entire visible library.");
+                return;
+            }
             if (!query) {
                 alert("Please enter a query in the search box first.");
                 return;
             }
             if (!geminiKey) {
-                alert("Please enter a Gemini API Key at the top of the page.");
+                alert("Please enter a Gemini API Key.");
                 return;
             }
 
             aiFilterBtn.disabled = true;
             aiFilterBtn.innerText = "Thinking...";
-            statusText.innerText = "Sending library to Gemini AI... Please wait.";
+            setStatus(`Sending ${selectedSongs.length} selected songs to Gemini AI... Please wait.`);
+            startTimer();
 
             try {
-                // Map to a smaller object to save tokens
-                const minimizedSongs = allFetchedSongs.map(s => ({
+                const minimizedSongs = selectedSongs.map(s => ({
                     id: s.id,
                     name: s.name,
                     artist: s.artist,
@@ -395,10 +503,8 @@
 
                 const prompt = `You are a music librarian API. I will provide a JSON array of songs in a user's library.
                 The user has requested to filter this library based on the following criteria: "${query}".
-                
                 Your task: Return a raw JSON array of ONLY the string IDs of the songs that match or fit the vibe of this criteria. 
                 Do not include markdown blocks like \`\`\`json. Return ONLY the raw array [ "id1", "id2" ].
-                
                 Song Library:
                 ${JSON.stringify(minimizedSongs)}`;
 
@@ -407,42 +513,38 @@
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         contents: [{ parts: [{ text: prompt }] }],
-                        generationConfig: { temperature: 0.1 } // Low temperature for deterministic output
+                        generationConfig: { temperature: 0.1 } 
                     })
                 });
 
-                if (!response.ok) throw new Error("Gemini API request failed.");
+                if (!response.ok) throw new Error("Google API rejected the request. Check console.");
 
                 const data = await response.json();
                 let resultText = data.candidates[0].content.parts[0].text;
-                
-                // Clean up any markdown formatting the LLM might have ignored instructions on
                 resultText = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
                 
                 const matchingIds = JSON.parse(resultText);
+                if (!Array.isArray(matchingIds)) throw new Error("AI did not return a valid array of IDs.");
 
-                if (!Array.isArray(matchingIds)) throw new Error("AI did not return an array.");
-
-                // Filter the master list based on the IDs returned by Gemini
-                const filteredSongs = allFetchedSongs.filter(song => matchingIds.includes(song.id));
+                const filteredSongs = selectedSongs.filter(song => matchingIds.includes(song.id));
                 
                 renderTable(filteredSongs);
-                statusText.innerText = `Gemini found ${filteredSongs.length} songs matching "${query}".`;
+                setStatus(`Gemini found ${filteredSongs.length} matches out of the ${selectedSongs.length} songs you selected.`);
 
             } catch (error) {
                 console.error(error);
-                statusText.innerText = "AI Filter failed. Check the console, or ensure your API key is correct.";
+                setStatus(`AI Filter Failed - ${error.message}`, true);
             } finally {
+                stopTimer();
                 aiFilterBtn.disabled = false;
                 aiFilterBtn.innerText = "Filter with AI";
             }
         });
 
-        // Reset Filter
         resetFilterBtn.addEventListener('click', () => {
             searchInput.value = '';
             renderTable(allFetchedSongs);
-            statusText.innerText = "Showing all songs.";
+            setStatus("Showing all songs.");
         });
 
 
@@ -451,6 +553,7 @@
         // ==========================================
 
         function renderTable(songs) {
+            currentlyDisplayedSongs = songs; 
             tbody.innerHTML = ''; 
             
             songs.forEach((song, index) => {
@@ -458,6 +561,9 @@
                 const tr = document.createElement('tr');
                 
                 tr.innerHTML = `
+                    <td>
+                        <input type="checkbox" class="song-checkbox" data-id="${song.id}" ${song.selected ? 'checked' : ''}>
+                    </td>
                     <td>${index + 1}</td>
                     <td>
                         <img src="${song.image}" class="album-art" alt="Album art">
