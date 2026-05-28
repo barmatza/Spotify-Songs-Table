@@ -61,15 +61,35 @@
             background-color: #1ed760;
         }
         button.ai-btn {
-            background-color: #8A2BE2; /* Distinct color for AI */
+            background-color: #8A2BE2; 
         }
         button.ai-btn:hover {
             background-color: #9b4dca;
         }
+        button:disabled {
+            background-color: #555 !important;
+            cursor: not-allowed;
+        }
+        .status-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
         #status {
             color: #b3b3b3;
             font-size: 0.9em;
-            margin-bottom: 10px;
+            transition: color 0.3s;
+        }
+        /* New Timer Styles */
+        #timer {
+            font-family: monospace;
+            background-color: #282828;
+            color: #1ed760;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+            font-weight: bold;
         }
         table {
             width: 100%;
@@ -122,7 +142,10 @@
             <button id="login-btn">Connect with Spotify</button>
         </div>
 
-        <div id="status">Please enter your credentials and log in.</div>
+        <div class="status-wrapper">
+            <div id="status">Please enter your credentials and log in.</div>
+            <div id="timer" class="hidden">0.0s</div>
+        </div>
 
         <div id="search-container" class="search-container hidden">
             <input type="search" id="search-input" placeholder="Standard text filter or AI prompt...">
@@ -165,6 +188,7 @@
         const loginBtn = document.getElementById('login-btn');
         const clearCacheBtn = document.getElementById('clear-cache-btn');
         const statusText = document.getElementById('status');
+        const timerBadge = document.getElementById('timer');
         const searchContainer = document.getElementById('search-container');
         const searchInput = document.getElementById('search-input');
         const aiFilterBtn = document.getElementById('ai-filter-btn');
@@ -173,9 +197,38 @@
         const tbody = document.getElementById('songs-body');
 
         // ==========================================
+        // TIMER LOGIC
+        // ==========================================
+        let loadingInterval;
+        let startTime;
+
+        function startTimer() {
+            timerBadge.classList.remove('hidden');
+            timerBadge.innerText = '0.0s';
+            startTime = Date.now();
+            
+            loadingInterval = setInterval(() => {
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                timerBadge.innerText = `${elapsed}s`;
+            }, 100);
+        }
+
+        function stopTimer() {
+            clearInterval(loadingInterval);
+            timerBadge.classList.add('hidden');
+        }
+
+        function setStatus(message, isError = false) {
+            statusText.innerText = message;
+            statusText.style.color = isError ? "#ff4444" : "#b3b3b3";
+            if (isError) {
+                setTimeout(() => { statusText.style.color = "#b3b3b3"; }, 5000);
+            }
+        }
+
+        // ==========================================
         // PKCE CRYPTOGRAPHIC HELPERS
         // ==========================================
-        
         const generateRandomString = (length) => {
             const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
             const values = crypto.getRandomValues(new Uint8Array(length));
@@ -198,7 +251,6 @@
         // ==========================================
         // POPUP & AUTHENTICATION HANDLING
         // ==========================================
-        
         const urlParams = new URLSearchParams(window.location.search);
         let code = urlParams.get('code');
         
@@ -209,7 +261,8 @@
 
         window.addEventListener('message', async (event) => {
             if (event.data && event.data.type === 'spotify-auth-code') {
-                statusText.innerText = "Authenticating...";
+                setStatus("Authenticating...");
+                startTimer();
                 await exchangeToken(event.data.code);
             }
         });
@@ -275,238 +328,5 @@
                 localStorage.removeItem('code_verifier');
                 setupSection.classList.add('hidden');
                 clearCacheBtn.classList.remove('hidden');
-                initApp();
-            } catch (error) {
-                console.error(error);
-                statusText.innerText = "Authentication failed. Please check your Client ID and try again.";
-            }
-        }
-
-        // ==========================================
-        // CORE LOGIC & DATA FETCHING
-        // ==========================================
-
-        async function initApp() {
-            // Re-save Gemini key if modified while cached
-            if (geminiKeyInput.value) {
-                localStorage.setItem(GEMINI_KEY_KEY, geminiKeyInput.value.trim());
-            }
-
-            const cachedSongs = localStorage.getItem(CACHE_KEY);
-            
-            if (cachedSongs) {
-                statusText.innerText = "Loaded from cache.";
-                allFetchedSongs = JSON.parse(cachedSongs); 
-                renderTable(allFetchedSongs);
-            } else if (accessToken) {
-                statusText.innerText = "Fetching songs from Spotify... This might take a moment.";
-                const songs = await fetchAllLikedSongs();
-                if (songs.length > 0) {
-                    localStorage.setItem(CACHE_KEY, JSON.stringify(songs));
-                    statusText.innerText = `Fetched ${songs.length} songs. Saved to cache.`;
-                    allFetchedSongs = songs; 
-                    renderTable(allFetchedSongs);
-                }
-            }
-            
-            if (allFetchedSongs.length > 0) {
-                searchContainer.classList.remove('hidden');
-            }
-        }
-
-        async function fetchAllLikedSongs() {
-            let allSongs = [];
-            let nextUrl = 'https://api.spotify.com/v1/me/tracks?limit=50'; 
-            let count = 0;
-
-            try {
-                while (nextUrl) {
-                    const response = await fetch(nextUrl, {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
-                    });
-
-                    if (!response.ok) throw new Error('Failed to fetch from Spotify');
-
-                    const data = await response.json();
-                    
-                    const formattedSongs = data.items.map(item => ({
-                        id: item.track.id,
-                        added_at: item.added_at,
-                        name: item.track.name,
-                        artist: item.track.artists.map(a => a.name).join(', '),
-                        album: item.track.album.name,
-                        image: item.track.album.images[2]?.url || '' 
-                    }));
-
-                    allSongs = allSongs.concat(formattedSongs);
-                    nextUrl = data.next; 
-                    count += formattedSongs.length;
-                    statusText.innerText = `Fetching... (${count} retrieved)`;
-                }
-                return allSongs;
-            } catch (error) {
-                console.error(error);
-                statusText.innerText = "Error fetching songs. Token may have expired.";
-                return [];
-            }
-        }
-
-        // ==========================================
-        // FILTERING: STANDARD & AI
-        // ==========================================
-
-        // Standard Text Filter (Real-time)
-        searchInput.addEventListener('input', (event) => {
-            const query = event.target.value.toLowerCase();
-            const filteredSongs = allFetchedSongs.filter(song => {
-                return song.name.toLowerCase().includes(query) || 
-                       song.artist.toLowerCase().includes(query) || 
-                       song.album.toLowerCase().includes(query);
-            });
-            renderTable(filteredSongs);
-        });
-
-        // AI Semantic Filter (Click Triggered)
-        aiFilterBtn.addEventListener('click', async () => {
-            const query = searchInput.value.trim();
-            const geminiKey = localStorage.getItem(GEMINI_KEY_KEY) || geminiKeyInput.value.trim();
-
-            if (!query) {
-                alert("Please enter a query in the search box first.");
-                return;
-            }
-            if (!geminiKey) {
-                alert("Please enter a Gemini API Key at the top of the page.");
-                return;
-            }
-
-            aiFilterBtn.disabled = true;
-            aiFilterBtn.innerText = "Thinking...";
-            statusText.innerText = "Sending library to Gemini AI... Please wait.";
-
-            try {
-                // Map to a smaller object to save tokens
-                const minimizedSongs = allFetchedSongs.map(s => ({
-                    id: s.id,
-                    name: s.name,
-                    artist: s.artist,
-                    album: s.album
-                }));
-
-                const prompt = `You are a music librarian API. I will provide a JSON array of songs in a user's library.
-                The user has requested to filter this library based on the following criteria: "${query}".
                 
-                Your task: Return a raw JSON array of ONLY the string IDs of the songs that match or fit the vibe of this criteria. 
-                Do not include markdown blocks like \`\`\`json. Return ONLY the raw array [ "id1", "id2" ].
-                
-                Song Library:
-                ${JSON.stringify(minimizedSongs)}`;
-
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: prompt }] }],
-                        generationConfig: { temperature: 0.1 } // Low temperature for deterministic output
-                    })
-                });
-
-                if (!response.ok) throw new Error("Gemini API request failed.");
-
-                const data = await response.json();
-                let resultText = data.candidates[0].content.parts[0].text;
-                
-                // Clean up any markdown formatting the LLM might have ignored instructions on
-                resultText = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
-                
-                const matchingIds = JSON.parse(resultText);
-
-                if (!Array.isArray(matchingIds)) throw new Error("AI did not return an array.");
-
-                // Filter the master list based on the IDs returned by Gemini
-                const filteredSongs = allFetchedSongs.filter(song => matchingIds.includes(song.id));
-                
-                renderTable(filteredSongs);
-                statusText.innerText = `Gemini found ${filteredSongs.length} songs matching "${query}".`;
-
-            } catch (error) {
-                console.error(error);
-                statusText.innerText = "AI Filter failed. Check the console, or ensure your API key is correct.";
-            } finally {
-                aiFilterBtn.disabled = false;
-                aiFilterBtn.innerText = "Filter with AI";
-            }
-        });
-
-        // Reset Filter
-        resetFilterBtn.addEventListener('click', () => {
-            searchInput.value = '';
-            renderTable(allFetchedSongs);
-            statusText.innerText = "Showing all songs.";
-        });
-
-
-        // ==========================================
-        // UI RENDERING & INITIALIZATION
-        // ==========================================
-
-        function renderTable(songs) {
-            tbody.innerHTML = ''; 
-            
-            songs.forEach((song, index) => {
-                const dateAdded = new Date(song.added_at).toLocaleDateString();
-                const tr = document.createElement('tr');
-                
-                tr.innerHTML = `
-                    <td>${index + 1}</td>
-                    <td>
-                        <img src="${song.image}" class="album-art" alt="Album art">
-                        <div style="display:inline-block; vertical-align:middle;">
-                            <div style="font-weight:bold; color:white;">${song.name}</div>
-                            <div style="color:#b3b3b3; font-size:0.85em; margin-top:4px;">${song.artist}</div>
-                        </div>
-                    </td>
-                    <td>${song.album}</td>
-                    <td>${dateAdded}</td>
-                `;
-                tbody.appendChild(tr);
-            });
-            
-            table.classList.remove('hidden');
-        }
-
-        clearCacheBtn.addEventListener('click', () => {
-            localStorage.removeItem(CACHE_KEY);
-            localStorage.removeItem(CLIENT_ID_KEY);
-            localStorage.removeItem(GEMINI_KEY_KEY);
-            accessToken = null;
-            allFetchedSongs = [];
-            
-            tbody.innerHTML = '';
-            table.classList.add('hidden');
-            searchContainer.classList.add('hidden');
-            searchInput.value = ''; 
-            setupSection.classList.remove('hidden');
-            clearCacheBtn.classList.add('hidden');
-            clientIdInput.value = '';
-            geminiKeyInput.value = '';
-            
-            statusText.innerText = "Cache and credentials cleared. Please enter credentials to start over.";
-        });
-
-        window.addEventListener('DOMContentLoaded', () => {
-            const savedClientId = localStorage.getItem(CLIENT_ID_KEY);
-            const savedGeminiKey = localStorage.getItem(GEMINI_KEY_KEY);
-            
-            if (savedClientId) clientIdInput.value = savedClientId;
-            if (savedGeminiKey) geminiKeyInput.value = savedGeminiKey;
-
-            if (localStorage.getItem(CACHE_KEY)) {
-                setupSection.classList.add('hidden');
-                clearCacheBtn.classList.remove('hidden');
-                initApp();
-            }
-        });
-    </script>
-</body>
-</html>
+                // Do not stop timer here, pass
