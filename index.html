@@ -26,13 +26,21 @@
             align-items: center;
             margin-bottom: 15px;
         }
-        input[type="text"] {
+        input[type="text"], input[type="search"] {
             padding: 10px;
             border-radius: 4px;
             border: 1px solid #333;
             background-color: #282828;
             color: white;
             width: 300px;
+        }
+        /* Make the search bar a bit wider and distinct */
+        #search-input {
+            width: 100%;
+            max-width: 500px;
+            margin-bottom: 20px;
+            font-size: 16px;
+            padding: 12px;
         }
         button {
             background-color: #1DB954;
@@ -55,7 +63,6 @@
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
         }
         th, td {
             text-align: left;
@@ -79,7 +86,12 @@
             margin-right: 15px;
         }
         .hidden {
-            display: none;
+            display: none !important;
+        }
+        .controls-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
     </style>
 </head>
@@ -92,12 +104,16 @@
         </div>
     </header>
 
-    <div id="setup-section" class="setup-group">
-        <input type="text" id="client-id-input" placeholder="Paste your Spotify Client ID here">
-        <button id="login-btn">Connect with Spotify</button>
-    </div>
+    <div class="controls-container">
+        <div id="setup-section" class="setup-group">
+            <input type="text" id="client-id-input" placeholder="Paste your Spotify Client ID here">
+            <button id="login-btn">Connect with Spotify</button>
+        </div>
 
-    <div id="status">Please enter your Client ID and log in to fetch your songs.</div>
+        <div id="status">Please enter your Client ID and log in to fetch your songs.</div>
+
+        <input type="search" id="search-input" class="hidden" placeholder="Filter by title, artist, or album...">
+    </div>
 
     <table id="songs-table" class="hidden">
         <thead>
@@ -120,7 +136,9 @@
         const SCOPES = 'user-library-read';
         const CACHE_KEY = 'spotify_liked_songs';
         const CLIENT_ID_KEY = 'spotify_client_id';
+        
         let accessToken = null;
+        let allFetchedSongs = []; // Store songs in memory for fast filtering
 
         // DOM Elements
         const clientIdInput = document.getElementById('client-id-input');
@@ -128,6 +146,7 @@
         const loginBtn = document.getElementById('login-btn');
         const clearCacheBtn = document.getElementById('clear-cache-btn');
         const statusText = document.getElementById('status');
+        const searchInput = document.getElementById('search-input');
         const table = document.getElementById('songs-table');
         const tbody = document.getElementById('songs-body');
 
@@ -158,7 +177,6 @@
         // POPUP & AUTHENTICATION HANDLING
         // ==========================================
         
-        // 1. Check if this instance is the popup returning from Spotify
         const urlParams = new URLSearchParams(window.location.search);
         let code = urlParams.get('code');
         
@@ -167,7 +185,6 @@
             window.close();
         }
 
-        // 2. Main Window: Listen for the code from the popup
         window.addEventListener('message', async (event) => {
             if (event.data && event.data.type === 'spotify-auth-code') {
                 statusText.innerText = "Authenticating...";
@@ -175,7 +192,6 @@
             }
         });
 
-        // 3. Trigger Popup
         loginBtn.addEventListener('click', async () => {
             const clientId = clientIdInput.value.trim();
             
@@ -184,7 +200,6 @@
                 return;
             }
 
-            // Save Client ID for later use
             localStorage.setItem(CLIENT_ID_KEY, clientId);
 
             const codeVerifier = generateRandomString(64);
@@ -210,7 +225,6 @@
             window.open(authUrl.toString(), 'Spotify Login', `width=${width},height=${height},top=${top},left=${left}`);
         });
 
-        // 4. Exchange Token
         async function exchangeToken(authCode) {
             const codeVerifier = localStorage.getItem('code_verifier');
             const clientId = localStorage.getItem(CLIENT_ID_KEY);
@@ -253,15 +267,22 @@
             
             if (cachedSongs) {
                 statusText.innerText = "Loaded from cache.";
-                renderTable(JSON.parse(cachedSongs));
+                allFetchedSongs = JSON.parse(cachedSongs); // Store in global memory
+                renderTable(allFetchedSongs);
             } else if (accessToken) {
                 statusText.innerText = "Fetching songs from Spotify... This might take a moment.";
                 const songs = await fetchAllLikedSongs();
                 if (songs.length > 0) {
                     localStorage.setItem(CACHE_KEY, JSON.stringify(songs));
                     statusText.innerText = `Fetched ${songs.length} songs. Saved to cache.`;
-                    renderTable(songs);
+                    allFetchedSongs = songs; // Store in global memory
+                    renderTable(allFetchedSongs);
                 }
+            }
+            
+            // Show the search bar if we have songs
+            if (allFetchedSongs.length > 0) {
+                searchInput.classList.remove('hidden');
             }
         }
 
@@ -303,6 +324,24 @@
         }
 
         // ==========================================
+        // FILTERING LOGIC
+        // ==========================================
+
+        searchInput.addEventListener('input', (event) => {
+            const query = event.target.value.toLowerCase();
+            
+            // Filter the master list in memory
+            const filteredSongs = allFetchedSongs.filter(song => {
+                return song.name.toLowerCase().includes(query) || 
+                       song.artist.toLowerCase().includes(query) || 
+                       song.album.toLowerCase().includes(query);
+            });
+            
+            // Re-render the table with the filtered results
+            renderTable(filteredSongs);
+        });
+
+        // ==========================================
         // UI RENDERING & INITIALIZATION
         // ==========================================
 
@@ -335,9 +374,12 @@
             localStorage.removeItem(CACHE_KEY);
             localStorage.removeItem(CLIENT_ID_KEY);
             accessToken = null;
+            allFetchedSongs = [];
             
             tbody.innerHTML = '';
             table.classList.add('hidden');
+            searchInput.classList.add('hidden');
+            searchInput.value = ''; // Reset search text
             setupSection.classList.remove('hidden');
             clearCacheBtn.classList.add('hidden');
             clientIdInput.value = '';
@@ -345,7 +387,6 @@
             statusText.innerText = "Cache and credentials cleared. Please enter a Client ID to start over.";
         });
 
-        // Check on load if we have cached credentials/data
         window.addEventListener('DOMContentLoaded', () => {
             const savedClientId = localStorage.getItem(CLIENT_ID_KEY);
             if (savedClientId) {
