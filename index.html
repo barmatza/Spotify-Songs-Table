@@ -116,7 +116,7 @@
         // ==========================================
         // CONFIGURATION
         // ==========================================
-        const REDIRECT_URI = 'http://localhost:5500/index.html'; // Update if your local server uses a different port
+        const REDIRECT_URI = 'https://barmatza.github.io/Spotify-Songs-Table/'; 
         const SCOPES = 'user-library-read';
         const CACHE_KEY = 'spotify_liked_songs';
         const CLIENT_ID_KEY = 'spotify_client_id';
@@ -193,7 +193,7 @@
             const hashed = await sha256(codeVerifier);
             const codeChallenge = base64encode(hashed);
 
-            const authUrl = new URL("https://accounts.spotify.com/authorize?client_id=$");
+            const authUrl = new URL("https://accounts.spotify.com/authorize");
             authUrl.search = new URLSearchParams({
                 client_id: clientId,
                 response_type: 'code',
