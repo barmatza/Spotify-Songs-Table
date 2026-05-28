@@ -691,8 +691,8 @@
                     album: s.album
                 }));
 
-                // 1. Chunk the array into batches of up to 900
-                const CHUNK_SIZE = 900;
+                // 1. Chunk the array into batches of up to 500
+                const CHUNK_SIZE = 500;
                 const chunks = [];
                 for (let i = 0; i < minimizedSongs.length; i += CHUNK_SIZE) {
                     chunks.push(minimizedSongs.slice(i, i + CHUNK_SIZE));
