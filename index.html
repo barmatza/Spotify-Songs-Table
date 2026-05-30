@@ -992,7 +992,7 @@
                 
                 for (let i = 0; i < trackUris.length; i += CHUNK_SIZE) {
                     const chunk = trackUris.slice(i, i + CHUNK_SIZE);
-                    const addResponse = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+                    const addResponse = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/items`, {
                         method: 'POST',
                         headers: { 
                             'Authorization': `Bearer ${accessToken}`,
