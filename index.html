@@ -440,6 +440,7 @@
                 scope: SCOPES,
                 code_challenge_method: 'S256',
                 code_challenge: codeChallenge,
+                show_dialog: true // <--- This forces Spotify to ask for the new permissions
             }).toString();
             
             const width = 450, height = 600;
