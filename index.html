@@ -947,7 +947,7 @@
             setStatus("Fetching user profile...");
 
             try {
-                // 1. Get the User's Spotify ID (Using exact Spotify API URL)
+                // 1. Get the User's Spotify ID (Using REAL Spotify URL)
                 const meResponse = await fetch('https://api.spotify.com/v1/me', {
                     headers: { 'Authorization': `Bearer ${accessToken}` }
                 });
@@ -961,7 +961,7 @@
 
                 setStatus(`Creating empty playlist "${playlistName}"...`);
 
-                // 2. Create an empty Playlist
+                // 2. Create an empty Playlist (Using REAL Spotify URL)
                 const createResponse = await fetch(`https://api.spotify.com/v1/users/${userId}/playlists`, {
                     method: 'POST',
                     headers: { 
@@ -971,16 +971,14 @@
                     body: JSON.stringify({
                         name: playlistName,
                         description: "Created via Spotify AI Filter App",
-                        public: false // Sets it to private by default
+                        public: false 
                     })
                 });
                 
-                // NEW: Detailed error parsing so we know exactly WHY Spotify rejected it
                 if (!createResponse.ok) {
                     const errData = await createResponse.json().catch(() => ({}));
                     console.error("Spotify API Error:", errData);
-                    const specificError = errData.error?.message || "Unknown API Error";
-                    throw new Error(`Spotify rejected playlist creation: ${specificError}`);
+                    throw new Error(`Spotify rejected playlist creation: ${errData.error?.message}`);
                 }
                 
                 const playlistData = await createResponse.json();
@@ -988,7 +986,7 @@
 
                 setStatus(`Adding ${selectedSongs.length} songs to playlist...`);
 
-                // 3. Add Tracks to Playlist (Spotify max limit is 100 per request)
+                // 3. Add Tracks to Playlist (Using REAL Spotify URL)
                 const trackUris = selectedSongs.map(song => `spotify:track:${song.id}`);
                 const CHUNK_SIZE = 100;
                 
