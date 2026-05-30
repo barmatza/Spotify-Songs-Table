@@ -216,7 +216,8 @@
             <button id="select-all-btn" class="secondary-btn">Select All</button>
             <button id="select-none-btn" class="secondary-btn">Deselect All</button>
             <button id="view-selected-btn" class="toggle-btn">Show Selected Only</button>
-            <span id="selection-count">0 songs selected</span>
+            <button id="create-playlist-btn" class="secondary-btn" style="background-color: #1DB954; color: white; border: none; margin-left: auto;">Create Playlist</button>
+            <span id="selection-count" style="margin-left: 10px;">0 songs selected</span>
         </div>
     </div>
 
@@ -239,7 +240,7 @@
         // CONFIGURATION
         // ==========================================
         const REDIRECT_URI = 'https://barmatza.github.io/Spotify-Songs-Table/'; 
-        const SCOPES = 'user-library-read';
+        const SCOPES = 'user-library-read playlist-modify-public playlist-modify-private';
         
         const CACHE_KEY = 'spotify_liked_songs';
         const CLIENT_ID_KEY = 'spotify_client_id';
@@ -287,6 +288,7 @@
         const selectAllBtn = document.getElementById('select-all-btn');
         const selectNoneBtn = document.getElementById('select-none-btn');
         const viewSelectedBtn = document.getElementById('view-selected-btn');
+        const createPlaylistBtn = document.getElementById('create-playlist-btn');
         const selectionCountText = document.getElementById('selection-count');
         
         const table = document.getElementById('songs-table');
@@ -897,6 +899,92 @@
                 setupSection.classList.add('hidden');
                 clearCacheBtn.classList.remove('hidden');
                 initApp();
+            }
+        });
+
+        // ==========================================
+        // PLAYLIST CREATION LOGIC
+        // ==========================================
+        createPlaylistBtn.addEventListener('click', async () => {
+            const selectedSongs = allFetchedSongs.filter(s => s.selected);
+            
+            if (selectedSongs.length === 0) {
+                alert("Please select at least one song to create a playlist.");
+                return;
+            }
+
+            const playlistName = prompt("Enter a name for your new playlist:", "AI Filtered Playlist");
+            if (!playlistName) return; // User hit cancel
+
+            createPlaylistBtn.disabled = true;
+            createPlaylistBtn.innerText = "Creating...";
+            startTimer();
+            setStatus("Fetching user profile...");
+
+            try {
+                // 1. Get the User's Spotify ID
+                const meResponse = await fetch('https://api.spotify.com/v1/me', {
+                    headers: { 'Authorization': `Bearer ${accessToken}` }
+                });
+                if (!meResponse.ok) {
+                    if (meResponse.status === 403) throw new Error("Permission denied. Did you remember to Clear Cache & Logout to accept the new permissions?");
+                    throw new Error("Failed to fetch user profile.");
+                }
+                
+                const meData = await meResponse.json();
+                const userId = meData.id;
+
+                setStatus(`Creating empty playlist "${playlistName}"...`);
+
+                // 2. Create an empty Playlist
+                const createResponse = await fetch(`https://api.spotify.com/v1/users/${userId}/playlists`, {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${accessToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        name: playlistName,
+                        description: "Created via Spotify AI Filter App",
+                        public: false // Sets it to private by default
+                    })
+                });
+                
+                if (!createResponse.ok) throw new Error("Failed to create the playlist in your account.");
+                
+                const playlistData = await createResponse.json();
+                const playlistId = playlistData.id;
+
+                setStatus(`Adding ${selectedSongs.length} songs to playlist...`);
+
+                // 3. Add Tracks to Playlist (Spotify max limit is 100 per request)
+                // We map our track IDs to the specific "spotify:track:ID" format the API requires
+                const trackUris = selectedSongs.map(song => `spotify:track:${song.id}`);
+                const CHUNK_SIZE = 100;
+                
+                for (let i = 0; i < trackUris.length; i += CHUNK_SIZE) {
+                    const chunk = trackUris.slice(i, i + CHUNK_SIZE);
+                    const addResponse = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+                        method: 'POST',
+                        headers: { 
+                            'Authorization': `Bearer ${accessToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ uris: chunk })
+                    });
+                    
+                    if (!addResponse.ok) throw new Error(`Failed to add tracks (Batch ${Math.floor(i/CHUNK_SIZE) + 1}).`);
+                }
+
+                setStatus(`Success! Playlist "${playlistName}" is now in your Spotify account.`);
+                
+            } catch (error) {
+                console.error(error);
+                setStatus(`Playlist Error - ${error.message}`, true);
+            } finally {
+                stopTimer();
+                createPlaylistBtn.disabled = false;
+                createPlaylistBtn.innerText = "Create Playlist";
             }
         });
     </script>
