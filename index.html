@@ -922,13 +922,13 @@
             setStatus("Fetching user profile...");
 
             try {
-                // 1. Get the User's Spotify ID
+                // 1. Get the User's Spotify ID (Using exact Spotify API URL)
                 const meResponse = await fetch('https://api.spotify.com/v1/me', {
                     headers: { 'Authorization': `Bearer ${accessToken}` }
                 });
+                
                 if (!meResponse.ok) {
-                    if (meResponse.status === 403) throw new Error("Permission denied. Did you remember to Clear Cache & Logout to accept the new permissions?");
-                    throw new Error("Failed to fetch user profile.");
+                    throw new Error("Failed to fetch user profile. You may need to log out and log back in.");
                 }
                 
                 const meData = await meResponse.json();
@@ -950,7 +950,13 @@
                     })
                 });
                 
-                if (!createResponse.ok) throw new Error("Failed to create the playlist in your account.");
+                // NEW: Detailed error parsing so we know exactly WHY Spotify rejected it
+                if (!createResponse.ok) {
+                    const errData = await createResponse.json().catch(() => ({}));
+                    console.error("Spotify API Error:", errData);
+                    const specificError = errData.error?.message || "Unknown API Error";
+                    throw new Error(`Spotify rejected playlist creation: ${specificError}`);
+                }
                 
                 const playlistData = await createResponse.json();
                 const playlistId = playlistData.id;
@@ -958,7 +964,6 @@
                 setStatus(`Adding ${selectedSongs.length} songs to playlist...`);
 
                 // 3. Add Tracks to Playlist (Spotify max limit is 100 per request)
-                // We map our track IDs to the specific "spotify:track:ID" format the API requires
                 const trackUris = selectedSongs.map(song => `spotify:track:${song.id}`);
                 const CHUNK_SIZE = 100;
                 
@@ -973,13 +978,17 @@
                         body: JSON.stringify({ uris: chunk })
                     });
                     
-                    if (!addResponse.ok) throw new Error(`Failed to add tracks (Batch ${Math.floor(i/CHUNK_SIZE) + 1}).`);
+                    if (!addResponse.ok) {
+                        const errData = await addResponse.json().catch(() => ({}));
+                        console.error("Spotify Add Tracks Error:", errData);
+                        throw new Error(`Failed to add tracks (Batch ${Math.floor(i/CHUNK_SIZE) + 1}).`);
+                    }
                 }
 
                 setStatus(`Success! Playlist "${playlistName}" is now in your Spotify account.`);
                 
             } catch (error) {
-                console.error(error);
+                console.error("Full caught error:", error);
                 setStatus(`Playlist Error - ${error.message}`, true);
             } finally {
                 stopTimer();
