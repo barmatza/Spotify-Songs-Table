@@ -245,9 +245,11 @@
         const CACHE_KEY = 'spotify_liked_songs';
         const CLIENT_ID_KEY = 'spotify_client_id';
         const GEMINI_KEY_KEY = 'gemini_api_key';
+        const TOKEN_KEY = 'spotify_access_token';
+        const TOKEN_EXPIRY_KEY = 'spotify_token_expiry';
         
         let accessToken = null;
-        let allFetchedSongs = []; 
+        let allFetchedSongs = [];
         let aiFilteredSongs = []; 
         let skippedSongs = []; 
         let rejectedSongs = []; // NEW: Stores songs the AI didn't return
@@ -472,6 +474,10 @@
                 
                 const data = await response.json();
                 accessToken = data.access_token;
+                
+                // NEW: Save the token and calculate its exact death-time (usually 3600s / 1 hour)
+                localStorage.setItem(TOKEN_KEY, accessToken);
+                localStorage.setItem(TOKEN_EXPIRY_KEY, Date.now() + (data.expires_in * 1000));
                 
                 localStorage.removeItem('code_verifier');
                 setupSection.classList.add('hidden');
@@ -857,6 +863,8 @@
             localStorage.removeItem(CACHE_KEY);
             localStorage.removeItem(CLIENT_ID_KEY);
             localStorage.removeItem(GEMINI_KEY_KEY);
+            localStorage.removeItem(TOKEN_KEY);
+            localStorage.removeItem(TOKEN_EXPIRY_KEY);
             accessToken = null;
             allFetchedSongs = [];
             currentlyDisplayedSongs = [];
@@ -896,10 +904,26 @@
             if (savedClientId) clientIdInput.value = savedClientId;
             if (savedGeminiKey) geminiKeyInput.value = savedGeminiKey;
 
+            // NEW: Check if we have a token AND if it is still alive
+            const savedExpiry = localStorage.getItem(TOKEN_EXPIRY_KEY);
+            if (savedExpiry && Date.now() < parseInt(savedExpiry)) {
+                accessToken = localStorage.getItem(TOKEN_KEY);
+            } else {
+                // The token is dead or missing. Clean it up.
+                localStorage.removeItem(TOKEN_KEY);
+                localStorage.removeItem(TOKEN_EXPIRY_KEY);
+                accessToken = null;
+            }
+
             if (localStorage.getItem(CACHE_KEY)) {
                 setupSection.classList.add('hidden');
                 clearCacheBtn.classList.remove('hidden');
                 initApp();
+                
+                // If the cache exists but the token is dead, warn the user
+                if (!accessToken) {
+                    setStatus("Your Spotify session expired. Please 'Clear Cache & Logout' and reconnect to create playlists.", true);
+                }
             }
         });
 
