@@ -743,7 +743,8 @@
                             contents: [{ parts: [{ text: prompt }] }],
                             generationConfig: { 
                                 temperature: 0.1,
-                                maxOutputTokens: 8192 
+                                maxOutputTokens: 8192,
+                                responseMimeType: "application/json" // Forces strict JSON generation
                             } 
                         })
                     });
@@ -754,11 +755,12 @@
                     }
 
                     const data = await response.json();
-                    let resultText = data.candidates[0].content.parts[0].text;
-                    resultText = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
+                    const resultText = data.candidates[0].content.parts[0].text;
                     
-                    const matchingIds = JSON.parse(resultText);
-                    if (!Array.isArray(matchingIds)) throw new Error(`Chunk ${index + 1} did not return a valid array of IDs.`);
+                    // Defensive Parsing: Extract all complete alphanumeric strings wrapped in quotes.
+                    // This bypasses JSON.parse() crashes completely. If the AI cuts off like `"id3`, it is safely ignored.
+                    const matches = resultText.match(/"([a-zA-Z0-9]+)"/g);
+                    const matchingIds = matches ? matches.map(id => id.replace(/"/g, '')) : [];
                     
                     return matchingIds;
                 });
