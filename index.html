@@ -962,7 +962,7 @@
                 setStatus(`Creating empty playlist "${playlistName}"...`);
 
                 // 2. Create an empty Playlist (Using REAL Spotify URL)
-                const createResponse = await fetch(`https://api.spotify.com/v1/users/${userId}/playlists`, {
+                const createResponse = await fetch(`https://api.spotify.com/v1/me/playlists`, {
                     method: 'POST',
                     headers: { 
                         'Authorization': `Bearer ${accessToken}`,
