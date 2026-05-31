@@ -237,6 +237,7 @@
                 <th>#</th>
                 <th>Title</th>
                 <th>Album</th>
+                <th>Genre</th>
                 <th>Date Added</th>
             </tr>
         </thead>
@@ -335,7 +336,8 @@
                 baseList = baseList.filter(song =>
                     song.name.toLowerCase().includes(query) || 
                     song.artist.toLowerCase().includes(query) || 
-                    song.album.toLowerCase().includes(query)
+                    song.album.toLowerCase().includes(query) ||
+                    (song.genre && song.genre.toLowerCase().includes(query)) // NEW
                 );
             }
 
@@ -544,7 +546,7 @@
 
         async function fetchAllLikedSongs() {
             let allSongs = [];
-            let nextUrl = 'https://api.spotify.com/v1/me/tracks?limit=50'; 
+            let nextUrl = "https://" + "api.spotify.com/v1/me/tracks?limit=50";
             let count = 0;
 
             try {
@@ -562,9 +564,11 @@
                         added_at: item.added_at,
                         name: item.track.name,
                         artist: item.track.artists.map(a => a.name).join(', '),
+                        artistId: item.track.artists[0]?.id, // NEW: Required for genre lookup
                         album: item.track.album.name,
                         image: item.track.album.images[2]?.url || '',
-                        selected: false
+                        selected: false,
+                        genre: '' 
                     }));
 
                     allSongs = allSongs.concat(formattedSongs);
@@ -572,6 +576,42 @@
                     count += formattedSongs.length;
                     setStatus(`Fetching... (${count} retrieved)`);
                 }
+
+                // === NEW: FETCH ARTIST GENRES IN BATCHES ===
+                setStatus("Enriching songs with artist genres...");
+                
+                // 1. Get a unique list of artist IDs to minimize API calls
+                const uniqueArtistIds = [...new Set(allSongs.map(s => s.artistId).filter(id => id))];
+                const artistGenreMap = {};
+                const apiBase = "https://" + "api.spotify.com/v1/artists?ids=";
+
+                // 2. Spotify allows max 50 IDs per /artists request
+                for (let i = 0; i < uniqueArtistIds.length; i += 50) {
+                    const chunk = uniqueArtistIds.slice(i, i + 50);
+                    const artistRes = await fetch(`${apiBase}${chunk.join(',')}`, {
+                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                    });
+                    
+                    if (artistRes.ok) {
+                        const artistData = await artistRes.json();
+                        artistData.artists.forEach(artist => {
+                            if (artist) {
+                                // Cap at 2 genres so the table column doesn't get massive
+                                artistGenreMap[artist.id] = artist.genres.slice(0, 2).join(', ') || 'Unknown';
+                            }
+                        });
+                    }
+                }
+
+                // 3. Map the discovered genres back to the individual songs
+                allSongs.forEach(song => {
+                    if (song.artistId && artistGenreMap[song.artistId]) {
+                        song.genre = artistGenreMap[song.artistId];
+                    } else {
+                        song.genre = 'Unknown';
+                    }
+                });
+
                 return allSongs;
             } catch (error) {
                 console.error(error);
@@ -755,10 +795,7 @@
                 }
 
                 const minimizedSongs = songsToProcess.map(s => ({
-                    id: s.id,
-                    name: s.name,
-                    artist: s.artist,
-                    album: s.album
+                    id: s.id, name: s.name, artist: s.artist, album: s.album, genre: s.genre
                 }));
 
                 const chunks = [];
@@ -889,7 +926,7 @@
                 }
 
                 const minimizedSongs = songsToProcess.map(s => ({
-                    id: s.id, name: s.name, artist: s.artist, album: s.album
+                    id: s.id, name: s.name, artist: s.artist, album: s.album, genre: s.genre
                 }));
 
                 const chunks = [];
@@ -1006,6 +1043,7 @@
                         </div>
                     </td>
                     <td>${song.album}</td>
+                    <td style="font-size: 0.85em; color: #b3b3b3; text-transform: capitalize;">${song.genre}</td>
                     <td>${dateAdded}</td>
                 `;
                 tbody.appendChild(tr);
