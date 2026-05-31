@@ -208,11 +208,17 @@
             <button id="process-skipped-btn" class="secondary-btn" style="background-color: #ff9800; color: #000; font-weight: bold; white-space: nowrap; margin-left: 15px;">Process Remaining</button>
         </div>
 
-        <div id="search-container" class="search-container hidden" style="flex-wrap: wrap; max-width: 800px;">
-            <input type="search" id="search-input" placeholder="Standard text filter or AI prompt...">
-            <button id="ai-filter-btn" class="ai-btn">Filter with AI</button>
-            <button id="reset-filter-btn" style="background-color: #333;">Reset Filters</button>
-            <button id="save-tab-btn" class="secondary-btn" style="background-color: #007bff;">Save View to New Tab</button>
+        <div id="search-container" class="search-container hidden" style="flex-direction: column; align-items: stretch; max-width: 800px; gap: 15px;">
+            <div style="display: flex; gap: 10px;">
+                <input type="search" id="search-input" placeholder="Standard text filter (Title, Artist, Album)..." style="flex-grow: 1; font-size: 16px; padding: 12px;">
+                <button id="save-tab-btn" class="secondary-btn" style="background-color: #007bff; min-width: 160px;">Save View to Tab</button>
+            </div>
+            
+            <div style="display: flex; gap: 10px;">
+                <input type="text" id="ai-prompt-input" placeholder="AI Prompt: Describe the vibe (e.g., 'Upbeat running music')..." style="flex-grow: 1; font-size: 16px; padding: 12px; border-color: #8A2BE2;">
+                <button id="ai-filter-btn" class="ai-btn" style="min-width: 150px;">Filter with AI</button>
+                <button id="reset-filter-btn" style="background-color: #333;">Reset All</button>
+            </div>
         </div>
 
         <div id="selection-bar" class="selection-bar hidden">
@@ -287,6 +293,7 @@
 
         const searchContainer = document.getElementById('search-container');
         const searchInput = document.getElementById('search-input');
+        const aiPromptInput = document.getElementById('ai-prompt-input'); // NEW
         const aiFilterBtn = document.getElementById('ai-filter-btn');
         const resetFilterBtn = document.getElementById('reset-filter-btn');
         const saveTabBtn = document.getElementById('save-tab-btn');
@@ -658,7 +665,8 @@
             
             customTabCounter++;
             const tabId = `custom-${customTabCounter}`;
-            let tabName = searchInput.value.trim();
+            // Use text search name first, fallback to AI prompt, then fallback to auto-generated
+            let tabName = searchInput.value.trim() || aiPromptInput.value.trim();
             
             // Auto-generate a name if the search bar is empty
             if (!tabName) {
@@ -702,7 +710,7 @@
         searchInput.addEventListener('input', updateView);
 
         aiFilterBtn.addEventListener('click', async () => {
-            const query = searchInput.value.trim();
+            const query = aiPromptInput.value.trim(); // Reads from the new AI box
             const geminiKey = localStorage.getItem(GEMINI_KEY_KEY) || geminiKeyInput.value.trim();
             const selectedSongs = allFetchedSongs.filter(s => s.selected);
 
@@ -711,7 +719,7 @@
                 return;
             }
             if (!query) {
-                alert("Please enter a query in the search box first.");
+                alert("Please enter a prompt in the AI Prompt box first.");
                 return;
             }
             if (!geminiKey) {
@@ -966,6 +974,7 @@
 
         resetFilterBtn.addEventListener('click', () => {
             searchInput.value = '';
+            aiPromptInput.value = ''; // Clears the AI box
             showingSelectedOnly = false;
             viewSelectedBtn.classList.remove('active');
             viewSelectedBtn.innerText = "Show Selected Only";
@@ -1035,6 +1044,7 @@
             selectionBar.classList.add('hidden');
             tabsContainer.classList.add('hidden');
             searchInput.value = ''; 
+            aiPromptInput.value = ''; // Clears the AI box on logout
             setupSection.classList.remove('hidden');
             clearCacheBtn.classList.add('hidden');
             clientIdInput.value = '';
