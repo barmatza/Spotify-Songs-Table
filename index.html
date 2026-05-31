@@ -225,6 +225,7 @@
             <button id="select-all-btn" class="secondary-btn">Select All</button>
             <button id="select-none-btn" class="secondary-btn">Deselect All</button>
             <button id="view-selected-btn" class="toggle-btn">Show Selected Only</button>
+            <button id="fetch-genres-btn" class="secondary-btn" style="background-color: #8A2BE2; color: white; border: none; margin-left: 15px;">Fetch Selected Genres</button>
             <button id="create-playlist-btn" class="secondary-btn" style="background-color: #1DB954; color: white; border: none; margin-left: auto;">Create Playlist</button>
             <span id="selection-count" style="margin-left: 10px;">0 songs selected</span>
         </div>
@@ -303,6 +304,7 @@
         const selectAllBtn = document.getElementById('select-all-btn');
         const selectNoneBtn = document.getElementById('select-none-btn');
         const viewSelectedBtn = document.getElementById('view-selected-btn');
+        const fetchGenresBtn = document.getElementById('fetch-genres-btn'); // NEW
         const createPlaylistBtn = document.getElementById('create-playlist-btn');
         const selectionCountText = document.getElementById('selection-count');
         
@@ -520,10 +522,6 @@
                 setStatus("Loaded from cache.");
                 allFetchedSongs = mapSongsWithSelection(JSON.parse(cachedSongs)); 
                 
-                // If you refreshed while it was still loading genres last time, it resumes here!
-                const missingGenres = allFetchedSongs.some(s => s.genre === 'Loading...');
-                if (missingGenres) fetchGenresInBackground(allFetchedSongs);
-                
                 renderTable(allFetchedSongs);
             } else if (accessToken) {
                 if(timerBadge.classList.contains('hidden')) startTimer();
@@ -537,10 +535,7 @@
                     allFetchedSongs = mapSongsWithSelection(songs);
                     // Save initial cache so you don't lose the songs if you accidentally refresh
                     localStorage.setItem(CACHE_KEY, JSON.stringify(allFetchedSongs)); 
-                    
-                    // Run the background worker asynchronously (do NOT wait for it to finish)
-                    fetchGenresInBackground(allFetchedSongs);
-                }
+               }
             }
             
             if (allFetchedSongs.length > 0) {
@@ -591,85 +586,6 @@
                 setStatus("Error fetching songs. Token may have expired.", true);
                 return [];
             }
-        }
-
-        async function fetchGenresInBackground(songs) {
-            setStatus(`Fetched ${songs.length} songs. Loading genres in the background...`);
-            const uniqueArtistIds = [...new Set(songs.map(s => s.artistId).filter(id => id))];
-            
-            // Note: Update this apiBase if you are using your custom proxy URL!
-            const apiBase = "https://api.spotify." + "com/v1/artists/";
-            
-            let currentDelay = 0; // START AT MAXIMUM SPEED (0ms delay)
-
-            for (let i = 0; i < uniqueArtistIds.length; i++) {
-                const artistId = uniqueArtistIds[i];
-                
-                try {
-                    // Only fetch if this artist hasn't been cached yet
-                    const isAlreadyLoaded = songs.find(s => s.artistId === artistId)?.genre !== 'Loading...';
-                    if (isAlreadyLoaded) continue;
-
-                    const artistRes = await fetch(`${apiBase}${artistId}`, {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
-                    });
-                    
-                    // === THE ADAPTIVE BRAKES ===
-                    if (artistRes.status === 429) {
-                        const retryAfter = parseInt(artistRes.headers.get('Retry-After') || 3);
-                        console.warn(`Rate limit hit. Pausing background task for ${retryAfter} seconds.`);
-                        setStatus(`Rate limited. Cooling down for ${retryAfter}s...`);
-                        
-                        // 1. Wait for the required Spotify timeout
-                        await new Promise(r => setTimeout(r, retryAfter * 1000));
-                        
-                        // 2. Add a temporary "caution throttle" (200ms) so we don't immediately hit the wall again
-                        currentDelay = 200; 
-                        
-                        i--; // Step back to retry this exact artist
-                        continue; 
-                    }
-
-                    if (artistRes.ok) {
-                        const artistData = await artistRes.json();
-                        let genreText = 'Unknown';
-                        if (artistData && artistData.genres) {
-                            genreText = artistData.genres.slice(0, 2).join(', ') || 'Unknown';
-                        }
-                        
-                        // Update Data
-                        songs.filter(s => s.artistId === artistId).forEach(s => s.genre = genreText);
-                        
-                        // Update UI
-                        document.querySelectorAll(`.genre-cell-${artistId}`).forEach(cell => {
-                            cell.innerText = genreText;
-                        });
-
-                        // 3. Gradually release the brakes on successful fetches! (Speeds back up by 10ms each loop)
-                        if (currentDelay > 0) {
-                            currentDelay -= 10; 
-                            if (currentDelay < 0) currentDelay = 0; // Cap at max speed
-                        }
-                    }
-                    
-                    if (i % 10 === 0 || i === uniqueArtistIds.length - 1) {
-                        setStatus(`Background Task: Fetched genres for ${i + 1}/${uniqueArtistIds.length} artists.`);
-                    }
-                    
-                    // Only apply a delay if we recently hit a rate limit! Otherwise, skip this and go fast.
-                    if (currentDelay > 0) {
-                        await new Promise(r => setTimeout(r, currentDelay)); 
-                    }
-                    
-                } catch (e) {
-                    console.warn("Failed to fetch genre for artist " + artistId, e);
-                }
-            }
-            
-            setStatus("Ready! All background data loaded successfully.");
-            
-            // Overwrite the cache with the fully enriched dataset
-            localStorage.setItem(CACHE_KEY, JSON.stringify(songs));
         }
 
         // ==========================================
@@ -1172,6 +1088,101 @@
                     setStatus("Your Spotify session expired. Please 'Clear Cache & Logout' and reconnect to create playlists.", true);
                 }
             }
+        });
+
+        // ==========================================
+        // MANUAL GENRE FETCHING
+        // ==========================================
+        fetchGenresBtn.addEventListener('click', async () => {
+            const selectedSongs = allFetchedSongs.filter(s => s.selected);
+            
+            if (selectedSongs.length === 0) {
+                alert("Please select at least one song to fetch genres for.");
+                return;
+            }
+
+            fetchGenresBtn.disabled = true;
+            fetchGenresBtn.innerText = "Fetching...";
+            startTimer();
+
+            // 1. Get unique artists ONLY for the songs the user checked
+            const uniqueArtistIds = [...new Set(selectedSongs.map(s => s.artistId).filter(id => id))];
+            
+            const apiBase = "https://api.spotify." + "com/v1/artists/";
+            let currentDelay = 0; 
+            let fetchCount = 0;
+
+            setStatus(`Fetching genres for ${uniqueArtistIds.length} artists...`);
+
+            for (let i = 0; i < uniqueArtistIds.length; i++) {
+                const artistId = uniqueArtistIds[i];
+                
+                try {
+                    // Skip if we already successfully pulled this artist's genre previously
+                    const isAlreadyLoaded = selectedSongs.find(s => s.artistId === artistId)?.genre !== 'Loading...' && 
+                                            selectedSongs.find(s => s.artistId === artistId)?.genre !== 'Unknown';
+                    if (isAlreadyLoaded) continue;
+
+                    const artistRes = await fetch(`${apiBase}${artistId}`, {
+                        headers: { 'Authorization': `Bearer ${accessToken}` }
+                    });
+                    
+                    if (artistRes.status === 429) {
+                        const retryAfter = parseInt(artistRes.headers.get('Retry-After') || 3);
+                        console.warn(`Rate limit hit. Pausing for ${retryAfter} seconds.`);
+                        setStatus(`Rate limited by Spotify. Cooling down for ${retryAfter}s...`);
+                        
+                        await new Promise(r => setTimeout(r, retryAfter * 1000));
+                        currentDelay = 200; // Apply temporary caution brakes
+                        
+                        i--; // Retry this artist
+                        continue; 
+                    }
+
+                    if (artistRes.ok) {
+                        const artistData = await artistRes.json();
+                        let genreText = 'Unknown';
+                        if (artistData && artistData.genres && artistData.genres.length > 0) {
+                            genreText = artistData.genres.slice(0, 2).join(', ');
+                        }
+                        
+                        // Update the master array
+                        allFetchedSongs.filter(s => s.artistId === artistId).forEach(s => s.genre = genreText);
+                        
+                        // Dynamically update the UI cells
+                        document.querySelectorAll(`.genre-cell-${artistId}`).forEach(cell => {
+                            cell.innerText = genreText;
+                        });
+
+                        fetchCount++;
+
+                        if (currentDelay > 0) {
+                            currentDelay -= 10; 
+                            if (currentDelay < 0) currentDelay = 0; 
+                        }
+                    }
+                    
+                    if (i % 5 === 0 || i === uniqueArtistIds.length - 1) {
+                        setStatus(`Genre Fetch: Processed ${i + 1} of ${uniqueArtistIds.length} artists.`);
+                    }
+                    
+                    if (currentDelay > 0) {
+                        await new Promise(r => setTimeout(r, currentDelay)); 
+                    }
+                    
+                } catch (e) {
+                    console.warn("Failed to fetch genre for artist " + artistId, e);
+                }
+            }
+            
+            setStatus(`Success! Fetched new genres for ${fetchCount} artists.`);
+            
+            // Save the newly acquired data to the cache
+            localStorage.setItem(CACHE_KEY, JSON.stringify(allFetchedSongs));
+            
+            stopTimer();
+            fetchGenresBtn.disabled = false;
+            fetchGenresBtn.innerText = "Fetch Selected Genres";
         });
 
         // ==========================================
