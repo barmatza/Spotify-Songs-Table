@@ -201,8 +201,11 @@
             <button id="tab-skipped" class="tab-btn hidden" style="color: #ff9800;">Unprocessed <span id="skipped-badge"></span></button>
         </div>
 
-        <div id="skipped-warning" class="hidden" style="background-color: #332b00; color: #ffb300; padding: 10px; border-radius: 4px; margin-bottom: 15px; border: 1px solid #ff9800; font-size: 0.9em;">
-            <strong>Rate Limit Reached:</strong> Gemini can only process a maximum of 2,500 songs per request (5 batches of 500). The songs below were excluded from the AI filter.
+        <div id="skipped-warning" class="hidden" style="background-color: #332b00; color: #ffb300; padding: 10px; border-radius: 4px; margin-bottom: 15px; border: 1px solid #ff9800; font-size: 0.9em; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <strong>Rate Limit Reached:</strong> Gemini maxes out at 2,500 songs per request. The songs below were temporarily skipped.
+            </div>
+            <button id="process-skipped-btn" class="secondary-btn" style="background-color: #ff9800; color: #000; font-weight: bold; white-space: nowrap; margin-left: 15px;">Process Remaining</button>
         </div>
 
         <div id="search-container" class="search-container hidden" style="flex-wrap: wrap; max-width: 800px;">
@@ -252,8 +255,9 @@
         let allFetchedSongs = [];
         let aiFilteredSongs = []; 
         let skippedSongs = []; 
-        let rejectedSongs = []; // NEW: Stores songs the AI didn't return
-        let currentlyDisplayedSongs = [];
+        let rejectedSongs = []; 
+        let currentlyDisplayedSongs = []; 
+        let lastAiQuery = ""; // NEW: Remembers your AI prompt for batch processing
         let customTabs = []; 
         let customTabCounter = 0;
         
@@ -279,6 +283,7 @@
         const rejectedBadge = document.getElementById('rejected-badge');
         const skippedBadge = document.getElementById('skipped-badge');
         const skippedWarning = document.getElementById('skipped-warning');
+        const processSkippedBtn = document.getElementById('process-skipped-btn');
 
         const searchContainer = document.getElementById('search-container');
         const searchInput = document.getElementById('search-input');
@@ -713,6 +718,7 @@
                 return;
             }
 
+            lastAiQuery = query; // Save the query so the "Process Remaining" button uses the exact same prompt
             aiFilterBtn.disabled = true;
             aiFilterBtn.innerText = "Thinking...";
             setStatus(`Sending ${selectedSongs.length} selected songs to Gemini AI... Please wait.`);
@@ -826,6 +832,120 @@
             }
         });
 
+        // ==========================================
+        // PROCESS REMAINING / SKIPPED SONGS
+        // ==========================================
+        processSkippedBtn.addEventListener('click', async () => {
+            const geminiKey = localStorage.getItem(GEMINI_KEY_KEY) || geminiKeyInput.value.trim();
+            
+            if (skippedSongs.length === 0) return;
+            if (!lastAiQuery) {
+                alert("No previous AI prompt found. Please run a normal AI filter first."); 
+                return;
+            }
+
+            processSkippedBtn.disabled = true;
+            processSkippedBtn.innerText = "Processing...";
+            setStatus(`Sending next batch using prompt: "${lastAiQuery}"...`);
+            startTimer();
+
+            try {
+                const MAX_SONGS_PER_CHUNK = 500;
+                const MAX_CHUNKS = 5;
+                const TOTAL_LIMIT = MAX_SONGS_PER_CHUNK * MAX_CHUNKS;
+
+                let songsToProcess = skippedSongs;
+                let newSkipped = [];
+
+                if (skippedSongs.length > TOTAL_LIMIT) {
+                    songsToProcess = skippedSongs.slice(0, TOTAL_LIMIT);
+                    newSkipped = skippedSongs.slice(TOTAL_LIMIT);
+                }
+
+                const minimizedSongs = songsToProcess.map(s => ({
+                    id: s.id, name: s.name, artist: s.artist, album: s.album
+                }));
+
+                const chunks = [];
+                for (let i = 0; i < minimizedSongs.length; i += MAX_SONGS_PER_CHUNK) {
+                    chunks.push(minimizedSongs.slice(i, i + MAX_SONGS_PER_CHUNK));
+                }
+
+                const fetchPromises = chunks.map(async (chunk, index) => {
+                    const prompt = `You are a music librarian API. I will provide a JSON array of songs in a user's library.
+                    The user has requested to filter this library based on the following criteria: "${lastAiQuery}".
+                    Your task: Return a raw JSON array of ONLY the string IDs of the songs that match or fit the vibe of this criteria. 
+                    Do not include markdown blocks like \`\`\`json. Return ONLY the raw array [ "id1", "id2" ].
+                    Song Library:
+                    ${JSON.stringify(chunk)}`;
+
+                    const requestOptions = {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: prompt }] }],
+                            generationConfig: { 
+                                temperature: 0.1, maxOutputTokens: 8192, responseMimeType: "application/json" 
+                            } 
+                        })
+                    };
+
+                    let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiKey}`, requestOptions);
+
+                    if (response.status === 429) {
+                        console.warn(`Chunk ${index + 1}: Rate limit hit. Falling back to 3.1 Flash-Lite...`);
+                        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`, requestOptions);
+                    }
+
+                    if (!response.ok) {
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new Error(errorData.error?.message || `Chunk ${index + 1} failed.`);
+                    }
+
+                    const data = await response.json();
+                    const resultText = data.candidates[0].content.parts[0].text;
+                    const matches = resultText.match(/"([a-zA-Z0-9]+)"/g);
+                    return matches ? matches.map(id => id.replace(/"/g, '')) : [];
+                });
+
+                const resultsArray = await Promise.all(fetchPromises);
+                const allMatchingIds = resultsArray.flat();
+
+                const newFiltered = songsToProcess.filter(song => allMatchingIds.includes(song.id));
+                const newRejected = songsToProcess.filter(song => !allMatchingIds.includes(song.id));
+                newRejected.forEach(song => song.selected = false);
+
+                // === COMBINE OLD AND NEW RESULTS ===
+                aiFilteredSongs = [...aiFilteredSongs, ...newFiltered];
+                rejectedSongs = [...rejectedSongs, ...newRejected];
+                skippedSongs = newSkipped; // Update remaining
+
+                // Update Badges
+                aiBadge.innerText = `(${aiFilteredSongs.length})`;
+                if (rejectedSongs.length > 0) {
+                    tabRejected.classList.remove('hidden');
+                    rejectedBadge.innerText = `(${rejectedSongs.length})`;
+                }
+                if (skippedSongs.length > 0) {
+                    tabSkipped.classList.remove('hidden');
+                    skippedBadge.innerText = `(${skippedSongs.length})`;
+                } else {
+                    tabSkipped.classList.add('hidden');
+                }
+
+                switchTab('ai'); // Jump back to AI tab to see the combined list
+                setStatus(`Appended ${newFiltered.length} new matches! ${skippedSongs.length} songs remaining.`);
+
+            } catch (error) {
+                console.error("Batch error:", error);
+                setStatus(`Batch Filter Failed - ${error.message}`, true);
+            } finally {
+                stopTimer();
+                processSkippedBtn.disabled = false;
+                processSkippedBtn.innerText = "Process Remaining";
+            }
+        });
+
         resetFilterBtn.addEventListener('click', () => {
             searchInput.value = '';
             showingSelectedOnly = false;
@@ -878,6 +998,7 @@
             currentlyDisplayedSongs = [];
             aiFilteredSongs = [];
             skippedSongs = [];
+            lastAiQuery = "";
             customTabs = [];
             customTabCounter = 0;
             
