@@ -645,8 +645,9 @@
             }
         }
 
-        tabMain.addEventListener('click', () => switchTab('main'));
+        tabMaintabMain.addEventListener('click', () => switchTab('main'));
         tabAi.addEventListener('click', () => switchTab('ai'));
+        tabRejected.addEventListener('click', () => switchTab('rejected')); // <-- Added this!
         tabSkipped.addEventListener('click', () => switchTab('skipped'));
 
         saveTabBtn.addEventListener('click', () => {
@@ -725,13 +726,19 @@
             startTimer();
 
             try {
+                // === HARD RESET ARRAYS & UI FOR BRAND NEW FILTER ===
+                aiFilteredSongs = [];
+                rejectedSongs = [];
+                skippedSongs = []; 
+                tabRejected.classList.add('hidden');
+                tabSkipped.classList.add('hidden');
+
                 // === NEW LIMIT LOGIC ===
                 const MAX_SONGS_PER_CHUNK = 500;
                 const MAX_CHUNKS = 5;
                 const TOTAL_LIMIT = MAX_SONGS_PER_CHUNK * MAX_CHUNKS; // 2500 max songs
 
                 let songsToProcess = selectedSongs;
-                skippedSongs = []; // Clear previous skips
 
                 // Slice the array if it exceeds the limit
                 if (selectedSongs.length > TOTAL_LIMIT) {
@@ -799,12 +806,23 @@
                 const resultsArray = await Promise.all(fetchPromises);
                 const allMatchingIds = resultsArray.flat();
 
-                // Match against the songs we ACTUALLY processed
+                // 1. The songs the AI successfully matched
                 const filteredSongs = songsToProcess.filter(song => allMatchingIds.includes(song.id));
+                
+                // 2. The songs the AI dropped or rejected
+                const newlyRejected = songsToProcess.filter(song => !allMatchingIds.includes(song.id));
+                newlyRejected.forEach(song => song.selected = false); // Automatically uncheck them
+                rejectedSongs = newlyRejected;
                 
                 aiFilteredSongs = filteredSongs;
                 tabAi.classList.remove('hidden');
                 aiBadge.innerText = `(${filteredSongs.length})`;
+
+                // Handle Filtered Out Tab UI
+                if (rejectedSongs.length > 0) {
+                    tabRejected.classList.remove('hidden');
+                    rejectedBadge.innerText = `(${rejectedSongs.length})`;
+                }
 
                 // Handle Skipped Songs Tab UI
                 if (skippedSongs.length > 0) {
