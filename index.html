@@ -226,6 +226,7 @@
             <button id="select-none-btn" class="secondary-btn">Deselect All</button>
             <button id="view-selected-btn" class="toggle-btn">Show Selected Only</button>
             <button id="fetch-genres-btn" class="secondary-btn" style="background-color: #8A2BE2; color: white; border: none; margin-left: 15px;">Fetch Selected Genres</button>
+            <button id="stop-fetch-btn" class="secondary-btn hidden" style="background-color: #ff4444; color: white; border: none; margin-left: 10px;">Stop Fetching</button>
             <button id="create-playlist-btn" class="secondary-btn" style="background-color: #1DB954; color: white; border: none; margin-left: auto;">Create Playlist</button>
             <span id="selection-count" style="margin-left: 10px;">0 songs selected</span>
         </div>
@@ -303,8 +304,11 @@
         const selectionBar = document.getElementById('selection-bar');
         const selectAllBtn = document.getElementById('select-all-btn');
         const selectNoneBtn = document.getElementById('select-none-btn');
+        let abortFetch = false; // NEW: The global kill switch
+
         const viewSelectedBtn = document.getElementById('view-selected-btn');
-        const fetchGenresBtn = document.getElementById('fetch-genres-btn'); // NEW
+        const fetchGenresBtn = document.getElementById('fetch-genres-btn'); 
+        const stopFetchBtn = document.getElementById('stop-fetch-btn'); // NEW
         const createPlaylistBtn = document.getElementById('create-playlist-btn');
         const selectionCountText = document.getElementById('selection-count');
         
@@ -1091,6 +1095,15 @@
         });
 
         // ==========================================
+        // EMERGENCY BRAKE
+        // ==========================================
+        stopFetchBtn.addEventListener('click', () => {
+            abortFetch = true;
+            stopFetchBtn.disabled = true;
+            stopFetchBtn.innerText = "Stopping...";
+        });
+
+       // ==========================================
         // MANUAL GENRE FETCHING
         // ==========================================
         fetchGenresBtn.addEventListener('click', async () => {
@@ -1101,8 +1114,14 @@
                 return;
             }
 
+            // Reset the UI and Kill Switch
+            abortFetch = false;
             fetchGenresBtn.disabled = true;
-            fetchGenresBtn.innerText = "Fetching...";
+            fetchGenresBtn.classList.add('hidden');
+            stopFetchBtn.classList.remove('hidden');
+            stopFetchBtn.disabled = false;
+            stopFetchBtn.innerText = "Stop Fetching";
+            
             startTimer();
 
             // 1. Get unique artists ONLY for the songs the user checked
@@ -1115,6 +1134,12 @@
             setStatus(`Fetching genres for ${uniqueArtistIds.length} artists...`);
 
             for (let i = 0; i < uniqueArtistIds.length; i++) {
+                // === THE KILL SWITCH CHECK ===
+                if (abortFetch) {
+                    setStatus(`Fetch aborted by user. Successfully fetched ${fetchCount} artists before stopping.`);
+                    break; // Instantly exits the loop
+                }
+
                 const artistId = uniqueArtistIds[i];
                 
                 try {
@@ -1132,9 +1157,18 @@
                         console.warn(`Rate limit hit. Pausing for ${retryAfter} seconds.`);
                         setStatus(`Rate limited by Spotify. Cooling down for ${retryAfter}s...`);
                         
-                        await new Promise(r => setTimeout(r, retryAfter * 1000));
-                        currentDelay = 200; // Apply temporary caution brakes
+                        // We use a small interval loop here instead of one big timeout, 
+                        // so the Stop button works even DURING a 10-second rate-limit cooldown!
+                        let cooldownTime = retryAfter * 10; // Check every 100ms
+                        while (cooldownTime > 0) {
+                            if (abortFetch) break;
+                            await new Promise(r => setTimeout(r, 100));
+                            cooldownTime--;
+                        }
                         
+                        if (abortFetch) break; // Double check after cooldown
+
+                        currentDelay = 200; // Apply temporary caution brakes
                         i--; // Retry this artist
                         continue; 
                     }
@@ -1175,14 +1209,18 @@
                 }
             }
             
-            setStatus(`Success! Fetched new genres for ${fetchCount} artists.`);
+            if (!abortFetch) {
+                setStatus(`Success! Fetched new genres for ${fetchCount} artists.`);
+            }
             
-            // Save the newly acquired data to the cache
+            // Save whatever we got to the cache, even if we aborted early!
             localStorage.setItem(CACHE_KEY, JSON.stringify(allFetchedSongs));
             
+            // Reset UI
             stopTimer();
+            stopFetchBtn.classList.add('hidden');
+            fetchGenresBtn.classList.remove('hidden');
             fetchGenresBtn.disabled = false;
-            fetchGenresBtn.innerText = "Fetch Selected Genres";
         });
 
         // ==========================================
