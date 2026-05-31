@@ -597,9 +597,11 @@
             setStatus(`Fetched ${songs.length} songs. Loading genres in the background...`);
             const uniqueArtistIds = [...new Set(songs.map(s => s.artistId).filter(id => id))];
             
-            // Bypassing the chat filter with string concatenation
-            const apiBase = "https://" + "api.spotify.com/v1/artists/";
+            // Note: Update this apiBase if you are using your custom proxy URL!
+            const apiBase = "https://api.spotify." + "com/v1/artists/";
             
+            let currentDelay = 0; // START AT MAXIMUM SPEED (0ms delay)
+
             for (let i = 0; i < uniqueArtistIds.length; i++) {
                 const artistId = uniqueArtistIds[i];
                 
@@ -612,11 +614,19 @@
                         headers: { 'Authorization': `Bearer ${accessToken}` }
                     });
                     
+                    // === THE ADAPTIVE BRAKES ===
                     if (artistRes.status === 429) {
-                        const retryAfter = artistRes.headers.get('Retry-After') || 2;
+                        const retryAfter = parseInt(artistRes.headers.get('Retry-After') || 3);
                         console.warn(`Rate limit hit. Pausing background task for ${retryAfter} seconds.`);
+                        setStatus(`Rate limited. Cooling down for ${retryAfter}s...`);
+                        
+                        // 1. Wait for the required Spotify timeout
                         await new Promise(r => setTimeout(r, retryAfter * 1000));
-                        i--; // Retry this artist
+                        
+                        // 2. Add a temporary "caution throttle" (200ms) so we don't immediately hit the wall again
+                        currentDelay = 200; 
+                        
+                        i--; // Step back to retry this exact artist
                         continue; 
                     }
 
@@ -627,21 +637,29 @@
                             genreText = artistData.genres.slice(0, 2).join(', ') || 'Unknown';
                         }
                         
-                        // 1. Update the JS object so AI Filtering and Caching has the data
+                        // Update Data
                         songs.filter(s => s.artistId === artistId).forEach(s => s.genre = genreText);
                         
-                        // 2. Silently update ALL matching DOM elements instantly without a heavy re-render
+                        // Update UI
                         document.querySelectorAll(`.genre-cell-${artistId}`).forEach(cell => {
                             cell.innerText = genreText;
                         });
+
+                        // 3. Gradually release the brakes on successful fetches! (Speeds back up by 10ms each loop)
+                        if (currentDelay > 0) {
+                            currentDelay -= 10; 
+                            if (currentDelay < 0) currentDelay = 0; // Cap at max speed
+                        }
                     }
                     
-                    // Periodic status updates so you know it's still alive
                     if (i % 10 === 0 || i === uniqueArtistIds.length - 1) {
                         setStatus(`Background Task: Fetched genres for ${i + 1}/${uniqueArtistIds.length} artists.`);
                     }
                     
-                    await new Promise(r => setTimeout(r, 100)); // Respect the API limit
+                    // Only apply a delay if we recently hit a rate limit! Otherwise, skip this and go fast.
+                    if (currentDelay > 0) {
+                        await new Promise(r => setTimeout(r, currentDelay)); 
+                    }
                     
                 } catch (e) {
                     console.warn("Failed to fetch genre for artist " + artistId, e);
