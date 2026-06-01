@@ -1026,6 +1026,7 @@
             } finally {
                 stopTimer();
                 updateApiStatus('gemini', 'idle');
+                processSkippedBtn.disabled = false;
                 processSkippedBtn.innerText = "Process Remaining";
             }
         });
