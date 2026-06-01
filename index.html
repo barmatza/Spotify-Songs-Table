@@ -722,14 +722,36 @@
             
             customTabCounter++;
             const tabId = `custom-${customTabCounter}`;
-            // Use text search name first, fallback to AI prompt, then fallback to auto-generated
-            let tabName = searchInput.value.trim() || aiPromptInput.value.trim();
             
-            // Auto-generate a name if the search bar is empty
+            // 1. Get base name from search inputs
+            const rawInputName = searchInput.value.trim() || aiPromptInput.value.trim();
+            let tabName = rawInputName;
+            
+            // 2. Auto-generate a default name if the inputs are empty
             if (!tabName) {
-                if (currentTab === 'ai') tabName = 'AI Results (Saved)';
-                else if (showingSelectedOnly) tabName = 'Selected Songs';
+                if (showingSelectedOnly) tabName = 'Selected Songs';
                 else tabName = `Saved View ${customTabCounter}`;
+            }
+
+            // 3. Prepend parent tab name if NOT on the Main tab
+            if (currentTab !== 'main') {
+                let parentName = "";
+                if (currentTab === 'ai') parentName = 'AI Results';
+                else if (currentTab === 'rejected') parentName = 'Filtered Out';
+                else if (currentTab === 'skipped') parentName = 'Unprocessed';
+                else if (currentTab.startsWith('custom-')) {
+                    const parent = customTabs.find(t => t.id === currentTab);
+                    if (parent) parentName = parent.name;
+                }
+
+                if (parentName) {
+                    // Clean fallback: If no search text was typed, just label it as a saved state of the parent
+                    if (!rawInputName && !showingSelectedOnly) {
+                         tabName = `${parentName} (Saved)`;
+                    } else {
+                         tabName = `${parentName} - ${tabName}`;
+                    }
+                }
             }
 
             // Snapshot the currently displayed list
