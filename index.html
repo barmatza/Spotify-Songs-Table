@@ -909,6 +909,7 @@
             } finally {
                 stopTimer();
                 updateApiStatus('gemini', 'idle');
+                aiFilterBtn.disabled = false;
                 aiFilterBtn.innerText = "Filter with AI";
             }
         });
