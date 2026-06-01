@@ -1234,7 +1234,26 @@
                 return;
             }
 
-            const playlistName = prompt("Enter a name for your new playlist:", "AI Filtered Playlist");
+            // 1. Determine the base name from the active tab
+            let baseTabName = "AI Filtered Playlist";
+            if (currentTab === 'main') baseTabName = "Main Library";
+            else if (currentTab === 'ai') baseTabName = "AI Results";
+            else if (currentTab === 'rejected') baseTabName = "Filtered Out";
+            else if (currentTab === 'skipped') baseTabName = "Unprocessed";
+            else if (currentTab.startsWith('custom-')) {
+                const tab = customTabs.find(t => t.id === currentTab);
+                if (tab) baseTabName = tab.name;
+            }
+
+            // 2. Convert to Title Case (preserving existing fully-capitalized acronyms)
+            const titleCaseName = baseTabName.replace(/\b\w+/g, function(txt) {
+                if (txt === txt.toUpperCase() && txt.length > 1) return txt; // Preserves words like "AI" or "EDM"
+                return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+            });
+
+            // 3. Append the [AI] tag and trigger the prompt
+            const defaultPlaylistName = `${titleCaseName} [AI]`;
+            const playlistName = prompt("Enter a name for your new playlist:", defaultPlaylistName);
             if (!playlistName) return; // User hit cancel
 
             createPlaylistBtn.disabled = true;
