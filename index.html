@@ -221,9 +221,8 @@
             </div>
         </div>
 
-        <div id="tabs-container" class="tabs hidden">
+        <<div id="tabs-container" class="tabs hidden">
             <button id="tab-main" class="tab-btn active">Main Library</button>
-            <button id="tab-ai" class="tab-btn hidden">AI Results <span id="ai-badge"></span></button>
             <button id="tab-rejected" class="tab-btn hidden" style="color: #9e9e9e;">Filtered Out <span id="rejected-badge"></span></button>
             <button id="tab-skipped" class="tab-btn hidden" style="color: #ff9800;">Unprocessed <span id="skipped-badge"></span></button>
         </div>
@@ -293,8 +292,9 @@
         let skippedSongs = []; 
         let rejectedSongs = []; 
         let currentlyDisplayedSongs = []; 
-        let lastAiQuery = ""; // NEW: Remembers your AI prompt for batch processing
-        let customTabs = []; 
+        let lastAiQuery = ""; // Remembers your AI prompt for batch processing
+        let latestAiTabId = null; // NEW: Tracks the current active AI tab for batch processing
+        let customTabs = [];
         let customTabCounter = 0;
         
         // View States
@@ -312,10 +312,8 @@
         
         const tabsContainer = document.getElementById('tabs-container');
         const tabMain = document.getElementById('tab-main');
-        const tabAi = document.getElementById('tab-ai');
         const tabRejected = document.getElementById('tab-rejected');
         const tabSkipped = document.getElementById('tab-skipped');
-        const aiBadge = document.getElementById('ai-badge');
         const rejectedBadge = document.getElementById('rejected-badge');
         const skippedBadge = document.getElementById('skipped-badge');
         const skippedWarning = document.getElementById('skipped-warning');
@@ -685,7 +683,6 @@
             document.querySelectorAll('.tab-btn').forEach(btn => {
                 if (btn.id === `tab-${tabId}` || 
                    (tabId === 'main' && btn.id === 'tab-main') || 
-                   (tabId === 'ai' && btn.id === 'tab-ai') || 
                    (tabId === 'rejected' && btn.id === 'tab-rejected') || 
                    (tabId === 'skipped' && btn.id === 'tab-skipped')) {
                     btn.classList.add('active');
@@ -710,8 +707,7 @@
         }
 
         tabMain.addEventListener('click', () => switchTab('main'));
-        tabAi.addEventListener('click', () => switchTab('ai'));
-        tabRejected.addEventListener('click', () => switchTab('rejected')); // <-- Added this!
+        tabRejected.addEventListener('click', () => switchTab('rejected')); 
         tabSkipped.addEventListener('click', () => switchTab('skipped'));
 
         saveTabBtn.addEventListener('click', () => {
@@ -896,12 +892,42 @@
                 
                 // 2. The songs the AI dropped or rejected
                 const newlyRejected = songsToProcess.filter(song => !allMatchingIds.includes(song.id));
-                newlyRejected.forEach(song => song.selected = false); // Automatically uncheck them
+                newlyRejected.forEach(song => song.selected = false); 
                 rejectedSongs = newlyRejected;
+
+                // 3. Dynamically Generate a New AI Tab
+                customTabCounter++;
+                const tabId = `custom-${customTabCounter}`;
+                // Truncate the query if it's super long so it doesn't break the UI
+                const displayQuery = query.length > 25 ? query.substring(0, 25) + '...' : query;
+                const tabName = `[AI] ${displayQuery}`;
                 
-                aiFilteredSongs = filteredSongs;
-                tabAi.classList.remove('hidden');
-                aiBadge.innerText = `(${filteredSongs.length})`;
+                latestAiTabId = tabId; // Track this specific tab for "Process Remaining"
+                
+                const newTab = {
+                    id: tabId,
+                    name: tabName,
+                    songs: filteredSongs 
+                };
+                customTabs.push(newTab);
+
+                // Create the tab button UI
+                const tabBtn = document.createElement('button');
+                tabBtn.className = 'tab-btn';
+                tabBtn.id = `tab-${tabId}`;
+                tabBtn.innerHTML = `${tabName} <span style="font-size: 0.8em; color: #888;" id="badge-${tabId}">(${filteredSongs.length})</span> <span class="close-tab-btn" data-id="${tabId}">✖</span>`;
+                
+                tabBtn.addEventListener('click', (e) => {
+                    if (e.target.classList.contains('close-tab-btn')) {
+                        e.stopPropagation();
+                        closeCustomTab(e.target.getAttribute('data-id'));
+                        return;
+                    }
+                    switchTab(tabId);
+                });
+
+                // Insert BEFORE the Filtered Out tab so it stays organized!
+                tabsContainer.insertBefore(tabBtn, tabRejected);
 
                 // Handle Filtered Out Tab UI
                 if (rejectedSongs.length > 0) {
@@ -917,7 +943,7 @@
                     tabSkipped.classList.add('hidden');
                 }
 
-                switchTab('ai'); 
+                switchTab(tabId); 
                 
                 if (skippedSongs.length > 0) {
                     setStatus(`Gemini found ${filteredSongs.length} matches. ${skippedSongs.length} songs were skipped due to limits.`);
@@ -1023,12 +1049,20 @@
                 newRejected.forEach(song => song.selected = false);
 
                 // === COMBINE OLD AND NEW RESULTS ===
-                aiFilteredSongs = [...aiFilteredSongs, ...newFiltered];
                 rejectedSongs = [...rejectedSongs, ...newRejected];
                 skippedSongs = newSkipped; // Update remaining
 
-                // Update Badges
-                aiBadge.innerText = `(${aiFilteredSongs.length})`;
+                // Find the latest AI tab to append to
+                if (latestAiTabId) {
+                    const aiTab = customTabs.find(t => t.id === latestAiTabId);
+                    if (aiTab) {
+                        aiTab.songs = [...aiTab.songs, ...newFiltered];
+                        const customBadge = document.getElementById(`badge-${latestAiTabId}`);
+                        if (customBadge) customBadge.innerText = `(${aiTab.songs.length})`;
+                    }
+                }
+
+                // Update Badges for rejected/skipped
                 if (rejectedSongs.length > 0) {
                     tabRejected.classList.remove('hidden');
                     rejectedBadge.innerText = `(${rejectedSongs.length})`;
@@ -1040,7 +1074,7 @@
                     tabSkipped.classList.add('hidden');
                 }
 
-                switchTab('ai'); // Jump back to AI tab to see the combined list
+                if (latestAiTabId) switchTab(latestAiTabId); 
                 setStatus(`Appended ${newFiltered.length} new matches! ${skippedSongs.length} songs remaining.`);
 
             } catch (error) {
@@ -1114,12 +1148,13 @@
             
             // Remove dynamically generated custom tabs from the UI
             document.querySelectorAll('.tab-btn').forEach(btn => {
-                if (btn.id !== 'tab-main' && btn.id !== 'tab-ai') btn.remove();
+                if (btn.id !== 'tab-main' && btn.id !== 'tab-rejected' && btn.id !== 'tab-skipped') btn.remove();
             });
             
             switchTab('main');
-            tabAi.classList.add('hidden'); // Hide AI tab on full reset
+            tabRejected.classList.add('hidden');
             tabSkipped.classList.add('hidden');
+            latestAiTabId = null;
             
             tbody.innerHTML = '';
             table.classList.add('hidden');
