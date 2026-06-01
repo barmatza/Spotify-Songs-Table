@@ -78,6 +78,19 @@
             background-color: #555 !important;
             cursor: not-allowed;
         }
+        
+        /* API Monitor Styles */
+        .dashboard-layout { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 15px; }
+        .api-monitor { background-color: #181818; border: 1px solid #333; padding: 12px 18px; border-radius: 6px; font-size: 0.85em; min-width: 260px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        .api-row { display: flex; justify-content: space-between; margin-bottom: 8px; align-items: center; }
+        .api-row:last-child { margin-bottom: 0; }
+        .api-label { font-weight: bold; color: #b3b3b3; }
+        .api-status { padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.5px; transition: all 0.2s; }
+        .status-idle { background: #333; color: #888; }
+        .status-active { background: #1DB954; color: #fff; box-shadow: 0 0 8px rgba(29, 185, 84, 0.4); }
+        .status-limited { background: #ff4444; color: #fff; box-shadow: 0 0 8px rgba(255, 68, 68, 0.4); }
+        .status-lite { background: #8A2BE2; color: #fff; box-shadow: 0 0 8px rgba(138, 43, 226, 0.4); }
+
         .status-wrapper {
             display: flex;
             align-items: center;
@@ -189,10 +202,26 @@
             <button id="login-btn">Connect with Spotify</button>
         </div>
 
-        <div class="status-wrapper">
-            <div id="status">Please enter your credentials and log in.</div>
-            <div id="timer" class="hidden">0.0s</div>
+        <div class="dashboard-layout">
+            <div class="status-wrapper" style="margin-bottom: 0;">
+                <div id="status">Please enter your credentials and log in.</div>
+                <div id="timer" class="hidden">0.0s</div>
+            </div>
+            
+            <div id="api-monitor" class="api-monitor hidden">
+                <div style="border-bottom: 1px solid #333; padding-bottom: 6px; margin-bottom: 10px; font-weight: bold; text-align: center; color: #fff;">API Health Monitor</div>
+                <div class="api-row">
+                    <span class="api-label">Spotify API:</span>
+                    <span id="spotify-status" class="api-status status-idle">IDLE</span>
+                </div>
+                <div class="api-row">
+                    <span class="api-label">Gemini API:</span>
+                    <span id="gemini-status" class="api-status status-idle">IDLE</span>
+                </div>
+            </div>
         </div>
+
+        <div id="tabs-container" class="tabs hidden">
 
         <div id="tabs-container" class="tabs hidden">
             <button id="tab-main" class="tab-btn active">Main Library</button>
@@ -314,6 +343,23 @@
         
         const table = document.getElementById('songs-table');
         const tbody = document.getElementById('songs-body');
+
+        const apiMonitor = document.getElementById('api-monitor');
+        const spotifyStatusBadge = document.getElementById('spotify-status');
+        const geminiStatusBadge = document.getElementById('gemini-status');
+
+        function updateApiStatus(api, state) {
+            const badge = api === 'spotify' ? spotifyStatusBadge : geminiStatusBadge;
+            badge.className = 'api-status'; // clear old classes
+            
+            if (state === 'idle') { badge.classList.add('status-idle'); badge.innerText = 'IDLE'; }
+            if (state === 'active') { badge.classList.add('status-active'); badge.innerText = api === 'gemini' ? '3.5 FLASH ACTIVE' : 'ACTIVE'; }
+            if (state === 'limited') { badge.classList.add('status-limited'); badge.innerText = 'RATE LIMITED (429)'; }
+            if (state === 'lite') { badge.classList.add('status-lite'); badge.innerText = '3.1 LITE ACTIVE'; }
+        }
+
+        // ==========================================
+        // MASTER VIEW ENGINE
 
         // ==========================================
         // MASTER VIEW ENGINE
@@ -546,6 +592,7 @@
                 searchContainer.classList.remove('hidden');
                 selectionBar.classList.remove('hidden');
                 tabsContainer.classList.remove('hidden');
+                apiMonitor.classList.remove('hidden'); // Show the monitor
                 updateView(); 
             }
         }
@@ -558,9 +605,11 @@
 
             try {
                 while (nextUrl) {
+                    updateApiStatus('spotify', 'active');
                     const response = await fetch(nextUrl, {
                         headers: { 'Authorization': `Bearer ${accessToken}` }
                     });
+                    if (response.status === 429) updateApiStatus('spotify', 'limited');
 
                     if (!response.ok) throw new Error('Failed to fetch from Spotify');
 
@@ -584,7 +633,8 @@
                     setStatus(`Fetching... (${count} retrieved)`);
                 }
 
-                return allSongs; // Return the UI list immediately! 
+                updateApiStatus('spotify', 'idle');
+                return allSongs; // Return the UI list immediately!
             } catch (error) {
                 console.error(error);
                 setStatus("Error fetching songs. Token may have expired.", true);
@@ -796,12 +846,13 @@
                         })
                     };
 
-                    // 1. Try Gemini 3.5 Flash first
+                    updateApiStatus('gemini', 'active');
                     let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiKey}`, requestOptions);
 
-                    // 2. If rate limited (HTTP 429), fallback to Gemini 3.1 Flash-Lite
                     if (response.status === 429) {
-                        console.warn(`Chunk ${index + 1}: Rate limit hit on 3.5 Flash. Falling back to 3.1 Flash-Lite...`);
+                        updateApiStatus('gemini', 'limited');
+                        console.warn(`Chunk ${index + 1}: Rate limit hit. Falling back to 3.1 Flash-Lite...`);
+                        updateApiStatus('gemini', 'lite');
                         response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`, requestOptions);
                     }
 
@@ -862,7 +913,7 @@
                 setStatus(`AI Filter Failed - ${error.message}`, true);
             } finally {
                 stopTimer();
-                aiFilterBtn.disabled = false;
+                updateApiStatus('gemini', 'idle');
                 aiFilterBtn.innerText = "Filter with AI";
             }
         });
@@ -925,10 +976,13 @@
                         })
                     };
 
+                    updateApiStatus('gemini', 'active');
                     let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiKey}`, requestOptions);
 
                     if (response.status === 429) {
+                        updateApiStatus('gemini', 'limited');
                         console.warn(`Chunk ${index + 1}: Rate limit hit. Falling back to 3.1 Flash-Lite...`);
+                        updateApiStatus('gemini', 'lite');
                         response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`, requestOptions);
                     }
 
@@ -976,7 +1030,7 @@
                 setStatus(`Batch Filter Failed - ${error.message}`, true);
             } finally {
                 stopTimer();
-                processSkippedBtn.disabled = false;
+                updateApiStatus('gemini', 'idle');
                 processSkippedBtn.innerText = "Process Remaining";
             }
         });
@@ -1148,11 +1202,13 @@
                                             selectedSongs.find(s => s.artistId === artistId)?.genre !== 'Unknown';
                     if (isAlreadyLoaded) continue;
 
+                    updateApiStatus('spotify', 'active');
                     const artistRes = await fetch(`${apiBase}${artistId}`, {
                         headers: { 'Authorization': `Bearer ${accessToken}` }
                     });
                     
                     if (artistRes.status === 429) {
+                        updateApiStatus('spotify', 'limited');
                         const retryAfter = parseInt(artistRes.headers.get('Retry-After') || 3);
                         console.warn(`Rate limit hit. Pausing for ${retryAfter} seconds.`);
                         setStatus(`Rate limited by Spotify. Cooling down for ${retryAfter}s...`);
@@ -1218,6 +1274,7 @@
             
             // Reset UI
             stopTimer();
+            updateApiStatus('spotify', 'idle');
             stopFetchBtn.classList.add('hidden');
             fetchGenresBtn.classList.remove('hidden');
             fetchGenresBtn.disabled = false;
