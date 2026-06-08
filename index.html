@@ -286,6 +286,7 @@
                 <th>✔</th>
                 <th>#</th>
                 <th>Title</th>
+                <th>Artist</th>
                 <th>Album</th>
                 <th>Genre</th>
                 <th>Date Added</th>
@@ -374,10 +375,10 @@
         // Dynamically setup table sorting based on column index
         const headers = table.querySelectorAll('th');
         const sortableColumns = [
-            { index: 1, key: 'name' },   // 2nd column: Title
-            { index: 2, key: 'artist' }, // 3rd column: Artist
-            { index: 3, key: 'album' },  // 4th column: Album
-            { index: 4, key: 'genre' }   // 5th column: Genre
+            { index: 2, key: 'name' },   // 3rd column: Title
+            { index: 3, key: 'artist' }, // 4th column: Artist
+            { index: 4, key: 'album' },  // 5th column: Album
+            { index: 5, key: 'genre' }   // 6th column: Genre
         ];
         
         sortableColumns.forEach(col => {
