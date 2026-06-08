@@ -236,7 +236,7 @@
 
         <div id="search-container" class="search-container hidden" style="flex-direction: column; align-items: stretch; max-width: 800px; gap: 15px;">
             <div style="display: flex; gap: 10px;">
-                <input type="search" id="search-input" placeholder="Standard text filter (Title, Artist, Album)..." style="flex-grow: 1; font-size: 16px; padding: 12px;">
+                <input type="search" id="search-input" placeholder='Search or use tags (artist:"name" genre:rock number:1-50)...' style="flex-grow: 1; font-size: 16px; padding: 12px;">
                 <button id="save-tab-btn" class="secondary-btn" style="background-color: #007bff; min-width: 160px;">Save View to Tab</button>
             </div>
             
@@ -375,15 +375,57 @@
                 if (tab) baseList = tab.songs;
             }
 
-            // 2. Apply text filter if any
-            const query = searchInput.value.trim().toLowerCase();
-            if (query) {
-                baseList = baseList.filter(song =>
-                    song.name.toLowerCase().includes(query) || 
-                    song.artist.toLowerCase().includes(query) || 
-                    song.album.toLowerCase().includes(query) ||
-                    (song.genre && song.genre.toLowerCase().includes(query)) // NEW
-                );
+            // 2. Apply advanced text filter if any
+            const rawQuery = searchInput.value.trim().toLowerCase();
+            if (rawQuery) {
+                // Regex to find patterns like key:"value" or key:value
+                const filterRegex = /(\w+):(?:(["'])(.*?)\2|([^ ]+))/g;
+                let match;
+                const specificFilters = [];
+                let generalSearch = rawQuery;
+
+                // Extract all specific filters and remove them from the general search string
+                while ((match = filterRegex.exec(rawQuery)) !== null) {
+                    const key = match[1];
+                    const value = match[3] || match[4]; // match[3] is quoted, match[4] is unquoted
+                    specificFilters.push({ key, value });
+                    generalSearch = generalSearch.replace(match[0], '');
+                }
+                generalSearch = generalSearch.trim();
+
+                baseList = baseList.filter(song => {
+                    // Check specific filters first
+                    let passesSpecific = true;
+                    for (const filter of specificFilters) {
+                        const { key, value } = filter;
+                        if (key === 'artist' && !song.artist.toLowerCase().includes(value)) passesSpecific = false;
+                        else if (key === 'album' && !song.album.toLowerCase().includes(value)) passesSpecific = false;
+                        else if (key === 'title' && !song.name.toLowerCase().includes(value)) passesSpecific = false;
+                        else if (key === 'genre' && !(song.genre && song.genre.toLowerCase().includes(value))) passesSpecific = false;
+                        else if (key === 'number' || key === 'row') {
+                            // Support ranges like number:30-100 or specific like number:5
+                            const limits = value.split('-');
+                            const min = parseInt(limits[0]) || 0;
+                            const max = parseInt(limits[1]) || min; 
+                            
+                            // Get the absolute row index based on the master list
+                            const pos = allFetchedSongs.findIndex(s => s.id === song.id) + 1;
+                            if (pos < min || pos > max) passesSpecific = false;
+                        }
+                    }
+                    
+                    if (!passesSpecific) return false;
+
+                    // If it passes specifics, check if it matches the remaining general search
+                    if (generalSearch) {
+                        return song.name.toLowerCase().includes(generalSearch) || 
+                               song.artist.toLowerCase().includes(generalSearch) || 
+                               song.album.toLowerCase().includes(generalSearch) ||
+                               (song.genre && song.genre.toLowerCase().includes(generalSearch));
+                    }
+                    
+                    return true;
+                });
             }
 
             // 3. Apply "Selected Only" toggle if active
