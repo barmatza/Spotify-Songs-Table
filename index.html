@@ -771,7 +771,9 @@
             const newTab = {
                 id: tabId,
                 name: tabName,
-                songs: songsToSave 
+                songs: songsToSave,
+                textQuery: searchInput.value.trim(),
+                aiQuery: aiPromptInput.value.trim() || lastAiQuery 
             };
             customTabs.push(newTab);
 
@@ -924,7 +926,8 @@
                 const newTab = {
                     id: tabId,
                     name: tabName,
-                    songs: filteredSongs 
+                    songs: filteredSongs,
+                    aiQuery: query // Remembers the exact prompt used for THIS tab
                 };
                 customTabs.push(newTab);
 
@@ -986,14 +989,22 @@
             const geminiKey = localStorage.getItem(GEMINI_KEY_KEY) || geminiKeyInput.value.trim();
             
             if (skippedSongs.length === 0) return;
-            if (!lastAiQuery) {
-                alert("No previous AI prompt found. Please run a normal AI filter first."); 
+            
+            // Extract the query from the tab that actually generated these skipped songs
+            let queryToUse = lastAiQuery; 
+            if (latestAiTabId) {
+                const aiTab = customTabs.find(t => t.id === latestAiTabId);
+                if (aiTab && aiTab.aiQuery) queryToUse = aiTab.aiQuery;
+            }
+
+            if (!queryToUse) {
+                alert("No AI prompt found for this batch. Please run a new AI filter."); 
                 return;
             }
 
             processSkippedBtn.disabled = true;
             processSkippedBtn.innerText = "Processing...";
-            setStatus(`Sending next batch using prompt: "${lastAiQuery}"...`);
+            setStatus(`Sending next batch using prompt: "${queryToUse}"...`);
             startTimer();
 
             try {
@@ -1020,7 +1031,7 @@
 
                 const fetchPromises = chunks.map(async (chunk, index) => {
                     const prompt = `You are a music librarian API. I will provide a JSON array of songs in a user's library.
-                    The user has requested to filter this library based on the following criteria: "${lastAiQuery}".
+                    The user has requested to filter this library based on the following criteria: "${queryToUse}".
                     Your task: Return a raw JSON array of ONLY the string IDs of the songs that match or fit the vibe of this criteria. 
                     Do not include markdown blocks like \`\`\`json. Return ONLY the raw array [ "id1", "id2" ].
                     Song Library:
@@ -1384,14 +1395,24 @@
             const playlistName = prompt("Enter a name for your new playlist:", defaultPlaylistName);
             if (!playlistName) return; // User hit cancel
 
-            // 4. Build dynamic description based on active queries
+            // 4. Build dynamic description based on the active tab's remembered queries
             let dynamicDesc = "Created via Spotify AI Filter App.";
-            const activeTextFilter = searchInput.value.trim();
+            let activeTextFilter = searchInput.value.trim();
+            let activeAiQuery = lastAiQuery;
+
+            // Override with the tab's specific remembered queries if on a custom tab
+            if (currentTab.startsWith('custom-')) {
+                const tab = customTabs.find(t => t.id === currentTab);
+                if (tab) {
+                    activeTextFilter = tab.textQuery || "";
+                    activeAiQuery = tab.aiQuery || "";
+                }
+            }
             
-            if (lastAiQuery && activeTextFilter) {
-                dynamicDesc = `AI Prompt: "${lastAiQuery}" | Text filter applied: "${activeTextFilter}"`;
-            } else if (lastAiQuery) {
-                dynamicDesc = `AI Prompt: "${lastAiQuery}"`;
+            if (activeAiQuery && activeTextFilter) {
+                dynamicDesc = `AI Prompt: "${activeAiQuery}" | Text filter applied: "${activeTextFilter}"`;
+            } else if (activeAiQuery) {
+                dynamicDesc = `AI Prompt: "${activeAiQuery}"`;
             } else if (activeTextFilter) {
                 dynamicDesc = `Text filter applied: "${activeTextFilter}"`;
             } else if (currentTab.startsWith('custom-')) {
