@@ -451,6 +451,12 @@
                 baseList = baseList.filter(song => song.selected);
             }
 
+            // 4. Apply Max Results Limit to Text Searches
+            const rawMax = parseInt(maxResultsInput.value.trim(), 10);
+            if (!isNaN(rawMax) && rawMax > 0) {
+                baseList = baseList.slice(0, rawMax);
+            }
+
             renderTable(baseList);
             updateSelectionCount();
         }
@@ -867,6 +873,7 @@
         // FILTERING: STANDARD & AI
         // ==========================================
         searchInput.addEventListener('input', updateView);
+        maxResultsInput.addEventListener('input', updateView); // Triggers real-time table trim
 
         aiFilterBtn.addEventListener('click', async () => {
             const query = aiPromptInput.value.trim(); 
