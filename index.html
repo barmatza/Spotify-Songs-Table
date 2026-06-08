@@ -1384,6 +1384,9 @@
                 if (tab) baseTabName = tab.name;
             }
 
+            // Clean the base name to prevent duplicate tags (Removes "[AI]" and trailing/leading hyphens)
+            baseTabName = baseTabName.replace(/\[AI\]/gi, '').replace(/^[\s-]+|[\s-]+$/g, '').trim();
+
             // 2. Convert to Title Case (preserving existing fully-capitalized acronyms)
             const titleCaseName = baseTabName.replace(/\b\w+/g, function(txt) {
                 if (txt === txt.toUpperCase() && txt.length > 1) return txt; // Preserves words like "AI" or "EDM"
