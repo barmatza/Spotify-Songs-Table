@@ -593,8 +593,8 @@
                 rejectedSongs = songsToProcess.filter(s => !matchingIds.includes(s.id)); rejectedSongs.forEach(s => s.selected = false);
 
                 latestAiTabId = `custom-${++customTabCounter}`;
-                customTabs.push({ id: latestAiTabId, name: `[AI] ${query.substring(0, 25)}...`, songs: newFiltered, aiQuery: query });
-                const btn = document.createElement('button'); btn.className = 'tab-btn'; btn.id = `tab-${latestAiTabId}`; btn.innerHTML = `[AI] ${query.substring(0,25)}... <span style="font-size:0.8em;color:#888;" id="badge-${latestAiTabId}">(${newFiltered.length})</span> <span class="close-tab-btn" data-id="${latestAiTabId}">✖</span>`;
+                customTabs.push({ id: latestAiTabId, name: `[AI] ${query}`, songs: newFiltered, aiQuery: query });
+                const btn = document.createElement('button'); btn.className = 'tab-btn'; btn.id = `tab-${latestAiTabId}`; btn.innerHTML = `[AI] ${query} <span style="font-size:0.8em;color:#888;" id="badge-${latestAiTabId}">(${newFiltered.length})</span> <span class="close-tab-btn" data-id="${latestAiTabId}">✖</span>`;
                 btn.addEventListener('click', (e) => { if (e.target.classList.contains('close-tab-btn')) { e.stopPropagation(); closeCustomTab(latestAiTabId); } else switchTab(latestAiTabId); });
                 tabsContainer.insertBefore(btn, tabRejected);
                 
