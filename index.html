@@ -274,6 +274,7 @@
             <button id="view-selected-btn" class="toggle-btn">Show Selected Only</button>
             <button id="fetch-genres-btn" class="secondary-btn" style="background-color: #1DB954; color: white; border: none; margin-left: 15px;">Fetch Genres (Spotify)</button>
             <button id="fetch-genres-ai-btn" class="secondary-btn" style="background-color: #8A2BE2; color: white; border: none; margin-left: 5px;">Fetch Genres (AI)</button>
+            <button id="fetch-lang-ai-btn" class="secondary-btn" style="background-color: #e91e63; color: white; border: none; margin-left: 5px;">Fetch Lang (AI)</button>
             <button id="stop-fetch-btn" class="secondary-btn hidden" style="background-color: #ff4444; color: white; border: none; margin-left: 10px;">Stop Fetching</button>
             <button id="create-playlist-btn" class="secondary-btn" style="background-color: #1DB954; color: white; border: none; margin-left: auto;">Create Playlist</button>
             <span id="selection-count" style="margin-left: 10px;">0 songs selected</span>
@@ -289,6 +290,7 @@
                 <th>Artist</th>
                 <th>Album</th>
                 <th>Genre</th>
+                <th>Language</th>
                 <th>Date Added</th>
             </tr>
         </thead>
@@ -364,8 +366,9 @@
 
         const viewSelectedBtn = document.getElementById('view-selected-btn');
         const fetchGenresBtn = document.getElementById('fetch-genres-btn'); 
-        const fetchGenresAiBtn = document.getElementById('fetch-genres-ai-btn'); // NEW
-        const stopFetchBtn = document.getElementById('stop-fetch-btn'); 
+        const fetchGenresAiBtn = document.getElementById('fetch-genres-ai-btn'); 
+        const fetchLangAiBtn = document.getElementById('fetch-lang-ai-btn'); // NEW
+        const stopFetchBtn = document.getElementById('stop-fetch-btn');
         const createPlaylistBtn = document.getElementById('create-playlist-btn');
         const selectionCountText = document.getElementById('selection-count');
         
@@ -375,10 +378,11 @@
         // Dynamically setup table sorting based on column index
         const headers = table.querySelectorAll('th');
         const sortableColumns = [
-            { index: 2, key: 'name' },   // 3rd column: Title
-            { index: 3, key: 'artist' }, // 4th column: Artist
-            { index: 4, key: 'album' },  // 5th column: Album
-            { index: 5, key: 'genre' }   // 6th column: Genre
+            { index: 2, key: 'name' },     // Title
+            { index: 3, key: 'artist' },   // Artist
+            { index: 4, key: 'album' },    // Album
+            { index: 5, key: 'genre' },    // Genre
+            { index: 6, key: 'language' }  // NEW: Language
         ];
         
         sortableColumns.forEach(col => {
@@ -747,7 +751,8 @@
                         album: item.track.album.name,
                         image: item.track.album.images[2]?.url || '',
                         selected: false,
-                        genre: 'Loading...' // Start with a placeholder
+                        genre: 'Loading...', // Start with a placeholder
+                        language: 'Loading...' // NEW
                     }));
 
                     allSongs = allSongs.concat(formattedSongs);
@@ -1312,6 +1317,7 @@
                     <td style="color:#b3b3b3;">${song.artist}</td>
                     <td>${song.album}</td>
                     <td class="genre-cell-${song.artistId}" style="font-size: 0.85em; color: #b3b3b3; text-transform: capitalize;">${song.genre || 'Loading...'}</td>
+                    <td class="lang-cell-${song.id}" style="font-size: 0.85em; color: #b3b3b3;">${song.language || 'Loading...'}</td>
                     <td>${dateAdded}</td>
                 `;
                 tbody.appendChild(tr);
@@ -1415,8 +1421,10 @@
             abortFetch = false;
             fetchGenresBtn.disabled = true;
             fetchGenresAiBtn.disabled = true;
+            fetchLangAiBtn.disabled = true;
             fetchGenresBtn.classList.add('hidden');
             fetchGenresAiBtn.classList.add('hidden');
+            fetchLangAiBtn.classList.add('hidden');
             stopFetchBtn.classList.remove('hidden');
             stopFetchBtn.disabled = false;
             stopFetchBtn.innerText = "Stop Fetching";
@@ -1546,8 +1554,10 @@
             abortFetch = false;
             fetchGenresBtn.disabled = true;
             fetchGenresAiBtn.disabled = true;
+            fetchLangAiBtn.disabled = true;
             fetchGenresBtn.classList.add('hidden');
             fetchGenresAiBtn.classList.add('hidden');
+            fetchLangAiBtn.classList.add('hidden');
             stopFetchBtn.classList.remove('hidden');
             stopFetchBtn.disabled = false;
             stopFetchBtn.innerText = "Stop Fetching";
@@ -1659,6 +1669,135 @@
             fetchGenresAiBtn.classList.remove('hidden');
             fetchGenresBtn.disabled = false;
             fetchGenresAiBtn.disabled = false;
+        });
+
+        // ==========================================
+        // AI LANGUAGE FETCHING (BATCH PROCESSING)
+        // ==========================================
+        fetchLangAiBtn.addEventListener('click', async () => {
+            const geminiKey = localStorage.getItem(GEMINI_KEY_KEY) || geminiKeyInput.value.trim();
+            if (!geminiKey) {
+                alert("Please enter a Gemini API Key to use AI Language Fetching.");
+                return;
+            }
+
+            const selectedSongs = allFetchedSongs.filter(s => s.selected);
+            if (selectedSongs.length === 0) {
+                alert("Please select at least one song to fetch languages for.");
+                return;
+            }
+
+            abortFetch = false;
+            fetchGenresBtn.disabled = true;
+            fetchGenresAiBtn.disabled = true;
+            fetchLangAiBtn.disabled = true;
+            fetchGenresBtn.classList.add('hidden');
+            fetchGenresAiBtn.classList.add('hidden');
+            fetchLangAiBtn.classList.add('hidden');
+            stopFetchBtn.classList.remove('hidden');
+            stopFetchBtn.disabled = false;
+            stopFetchBtn.innerText = "Stop Fetching";
+            
+            startTimer();
+
+            // Extract unique songs that don't already have languages
+            const songsToProcess = [];
+            selectedSongs.forEach(s => {
+                const isAlreadyLoaded = s.language !== 'Loading...' && s.language !== 'Unknown';
+                if (!isAlreadyLoaded) songsToProcess.push({ id: s.id, name: s.name, artist: s.artist });
+            });
+
+            if (songsToProcess.length === 0) {
+                setStatus("All selected songs already have languages loaded.");
+                stopTimer();
+                stopFetchBtn.classList.add('hidden');
+                fetchGenresBtn.classList.remove('hidden');
+                fetchGenresAiBtn.classList.remove('hidden');
+                fetchLangAiBtn.classList.remove('hidden');
+                fetchGenresBtn.disabled = false;
+                fetchGenresAiBtn.disabled = false;
+                fetchLangAiBtn.disabled = false;
+                return;
+            }
+
+            setStatus(`Fetching languages for ${songsToProcess.length} songs using Gemini...`);
+
+            const CHUNK_SIZE = 200; 
+            let fetchCount = 0;
+
+            const chunks = [];
+            for (let i = 0; i < songsToProcess.length; i += CHUNK_SIZE) {
+                chunks.push(songsToProcess.slice(i, i + CHUNK_SIZE));
+            }
+
+            try {
+                const fetchPromises = chunks.map(async (chunk, index) => {
+                    if (abortFetch) return {}; 
+
+                    const prompt = `You are a music language expert. Identify the primary vocal language of the following songs based on their title and artist. If it is purely instrumental, return "Instrumental".
+                    Return ONLY a valid JSON object mapping the song's ID to its language (1-2 words max, e.g. "English", "Spanish", "Instrumental"). Do not include markdown formatting.
+                    Example format: {"songId1": "English", "songId2": "Korean"}
+                    Songs:
+                    ${JSON.stringify(chunk)}`;
+
+                    const requestOptions = {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: prompt }] }],
+                            generationConfig: { temperature: 0.1, responseMimeType: "application/json" } 
+                        })
+                    };
+
+                    updateApiStatus('gemini', 'active');
+                    let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiKey}`, requestOptions);
+
+                    if (response.status === 429) {
+                        updateApiStatus('gemini', 'limited');
+                        console.warn(`Chunk ${index + 1}: Rate limit hit. Falling back to 3.1 Flash-Lite...`);
+                        updateApiStatus('gemini', 'lite');
+                        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`, requestOptions);
+                    }
+
+                    if (!response.ok) throw new Error(`Gemini API failed with status ${response.status}`);
+
+                    const data = await response.json();
+                    const resultText = data.candidates[0].content.parts[0].text;
+                    return JSON.parse(resultText); 
+                });
+
+                const resultsArray = await Promise.all(fetchPromises);
+                const masterLangMap = Object.assign({}, ...resultsArray);
+
+                if (!abortFetch) {
+                    for (const [songId, lang] of Object.entries(masterLangMap)) {
+                        allFetchedSongs.filter(s => s.id === songId).forEach(s => s.language = lang);
+                        document.querySelectorAll(`.lang-cell-${songId}`).forEach(cell => {
+                            cell.innerText = lang;
+                        });
+                        fetchCount++;
+                    }
+                }
+
+            } catch (e) {
+                console.warn("Failed to fetch batch languages from Gemini", e);
+                setStatus("Error analyzing languages. Some chunks may have failed.", true);
+            } finally {
+                updateApiStatus('gemini', 'idle');
+            }
+
+            if (!abortFetch) setStatus(`Success! AI fetched languages for ${fetchCount} songs.`);
+            
+            localStorage.setItem(CACHE_KEY, JSON.stringify(allFetchedSongs));
+            
+            stopTimer();
+            stopFetchBtn.classList.add('hidden');
+            fetchGenresBtn.classList.remove('hidden');
+            fetchGenresAiBtn.classList.remove('hidden');
+            fetchLangAiBtn.classList.remove('hidden');
+            fetchGenresBtn.disabled = false;
+            fetchGenresAiBtn.disabled = false;
+            fetchLangAiBtn.disabled = false;
         });
 
         // ==========================================
