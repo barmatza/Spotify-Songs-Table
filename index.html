@@ -243,7 +243,7 @@
 
         <div id="search-container" class="search-container hidden" style="flex-direction: column; align-items: stretch; max-width: 800px; gap: 15px;">
             <div style="display: flex; gap: 10px;">
-                <input type="search" id="search-input" placeholder='Search or use tags (artist:"name" genre:rock number:1-50)...' style="flex-grow: 1; font-size: 16px; padding: 12px;">
+                <input type="search" id="search-input" placeholder='Search or use tags (artist:"name" lang:english number:1-50)...' style="flex-grow: 1; font-size: 16px; padding: 12px;">
                 <button id="tags-help-btn" class="secondary-btn" title="View Search Tags" style="background-color: #444; font-weight: bold; font-size: 1.2em; padding: 0 15px;">?</button>
                 <button id="save-tab-btn" class="secondary-btn" style="background-color: #007bff; min-width: 160px;">Save View to Tab</button>
             </div>
@@ -255,8 +255,9 @@
                     <li><code style="color:#fff; background:#181818; padding:2px 4px; border-radius:3px;">album:"name"</code> - Exact or partial album</li>
                     <li><code style="color:#fff; background:#181818; padding:2px 4px; border-radius:3px;">title:"name"</code> - Track title match</li>
                     <li><code style="color:#fff; background:#181818; padding:2px 4px; border-radius:3px;">genre:name</code> - Specific genre match</li>
-                    <li><code style="color:#fff; background:#181818; padding:2px 4px; border-radius:3px;">number:X-Y</code> - Filter by master row (e.g., 1-50)</li>
-                    <li style="color: #8A2BE2;"><em>Combine them! </em> <code>artist:"queen" rock number:1-20</code></li>
+                    <li><code style="color:#fff; background:#181818; padding:2px 4px; border-radius:3px;">lang:name</code> - Specific language match</li>
+                    <li><code style="color:#fff; background:#181818; padding:2px 4px; border-radius:3px;">number:X-Y</code> - Filter by master row</li>
+                    <li style="color: #8A2BE2; grid-column: span 2;"><em>Combine them! </em> <code>artist:"queen" rock lang:english number:1-20</code></li>
                 </ul>
             </div>
             
@@ -468,6 +469,7 @@
                         else if (key === 'album' && !song.album.toLowerCase().includes(value)) passesSpecific = false;
                         else if (key === 'title' && !song.name.toLowerCase().includes(value)) passesSpecific = false;
                         else if (key === 'genre' && !(song.genre && song.genre.toLowerCase().includes(value))) passesSpecific = false;
+                        else if ((key === 'language' || key === 'lang') && !(song.language && song.language.toLowerCase().includes(value))) passesSpecific = false;
                         else if (key === 'number' || key === 'row') {
                             // Support ranges like number:30-100 or specific like number:5
                             const limits = value.split('-');
@@ -487,7 +489,8 @@
                         return song.name.toLowerCase().includes(generalSearch) || 
                                song.artist.toLowerCase().includes(generalSearch) || 
                                song.album.toLowerCase().includes(generalSearch) ||
-                               (song.genre && song.genre.toLowerCase().includes(generalSearch));
+                               (song.genre && song.genre.toLowerCase().includes(generalSearch)) ||
+                               (song.language && song.language.toLowerCase().includes(generalSearch));
                     }
                     
                     return true;
