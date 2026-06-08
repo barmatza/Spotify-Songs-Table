@@ -1564,14 +1564,14 @@
             
             startTimer();
 
-            // Extract unique artists that don't already have genres
+            // Extract unique artists that don't already have genres (safely handling older cached data)
             const artistsToProcess = [];
             const processedIds = new Set();
             
             selectedSongs.forEach(s => {
                 if (s.artistId && !processedIds.has(s.artistId)) {
-                    const isAlreadyLoaded = s.genre !== 'Loading...' && s.genre !== 'Unknown';
-                    if (!isAlreadyLoaded) artistsToProcess.push({ id: s.artistId, name: s.artist });
+                    const needsFetch = !s.genre || s.genre === 'Loading...' || s.genre === 'Unknown';
+                    if (needsFetch) artistsToProcess.push({ id: s.artistId, name: s.artist });
                     processedIds.add(s.artistId);
                 }
             });
@@ -1700,11 +1700,11 @@
             
             startTimer();
 
-            // Extract unique songs that don't already have languages
+            // Extract unique songs that don't already have languages (safely handling older cached data)
             const songsToProcess = [];
             selectedSongs.forEach(s => {
-                const isAlreadyLoaded = s.language !== 'Loading...' && s.language !== 'Unknown';
-                if (!isAlreadyLoaded) songsToProcess.push({ id: s.id, name: s.name, artist: s.artist });
+                const needsFetch = !s.language || s.language === 'Loading...' || s.language === 'Unknown';
+                if (needsFetch) songsToProcess.push({ id: s.id, name: s.name, artist: s.artist });
             });
 
             if (songsToProcess.length === 0) {
