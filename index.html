@@ -255,7 +255,7 @@
             
             <div style="display: flex; gap: 10px;">
                 <input type="text" id="ai-prompt-input" placeholder="AI Prompt: Describe the vibe (e.g., 'Upbeat running music')..." style="flex-grow: 1; font-size: 16px; padding: 12px; border-color: #8A2BE2;">
-                <input type="number" id="max-results-input" placeholder="Max Matches" min="1" style="width: 130px; font-size: 15px; padding: 12px; background-color: #282828; color: white; border: 1px solid #333; border-radius: 4px;">
+                <input type="number" id="max-results-input" placeholder="Max (0=All)" min="0" style="width: 130px; font-size: 15px; padding: 12px; background-color: #282828; color: white; border: 1px solid #333; border-radius: 4px;">
                 <button id="ai-filter-btn" class="ai-btn" style="min-width: 150px;">Filter with AI</button>
                 <button id="reset-filter-btn" style="background-color: #333;">Reset All</button>
             </div>
@@ -878,7 +878,8 @@
         aiFilterBtn.addEventListener('click', async () => {
             const query = aiPromptInput.value.trim(); 
             const rawMax = parseInt(maxResultsInput.value.trim(), 10);
-            const maxResults = isNaN(rawMax) ? null : rawMax;
+            // Treat 0 (or any negative number) as explicitly unlimited
+            const maxResults = (isNaN(rawMax) || rawMax <= 0) ? null : rawMax; 
             const geminiKey = localStorage.getItem(GEMINI_KEY_KEY) || geminiKeyInput.value.trim();
             const selectedSongs = allFetchedSongs.filter(s => s.selected);
 
