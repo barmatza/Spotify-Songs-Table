@@ -552,13 +552,15 @@
             tabsContainer.appendChild(btn); switchTab(tabId); setStatus(`Created new tab: ${tabName}`);
         });
 
-        resetFilterBtn.addEventListener('click', () => {
+        // Reusable helper to scrub all filter inputs and UI toggles
+        function resetFiltersUI() {
             searchInput.value = ''; aiPromptInput.value = ''; maxResultsInput.value = ''; sortColumn = null;
             showingSelectedOnly = false; viewSelectedBtn.classList.remove('active'); viewSelectedBtn.innerText = "Show Selected Only";
-            
-            // Also explicitly remove the sorting arrows from the headers
             table.querySelectorAll('th').forEach(t => t.classList.remove('sort-asc', 'sort-desc'));
-            
+        }
+
+        resetFilterBtn.addEventListener('click', () => {
+            resetFiltersUI();
             updateView(); setStatus("Filters reset.");
         });
 
@@ -775,10 +777,13 @@
 
         clearCacheBtn.addEventListener('click', () => {
             [CACHE_KEY, CLIENT_ID_KEY, GEMINI_KEY_KEY, TOKEN_KEY, TOKEN_EXPIRY_KEY].forEach(k => localStorage.removeItem(k));
-            accessToken = null; allFetchedSongs = []; aiFilteredSongs = []; skippedSongs = []; rejectedSongs = []; currentlyDisplayedSongs = []; customTabs = [];
+            accessToken = null; allFetchedSongs = []; aiFilteredSongs = []; skippedSongs = []; rejectedSongs = []; currentlyDisplayedSongs = []; customTabs = []; customTabCounter = 0;
             document.querySelectorAll('.tab-btn').forEach(b => { if(!['tab-main','tab-rejected','tab-skipped'].includes(b.id)) b.remove(); });
             switchTab('main'); [tabRejected, tabSkipped, table, searchContainer, selectionBar, tabsContainer, clearCacheBtn].forEach(e => e.classList.add('hidden'));
-            tbody.innerHTML = ''; searchInput.value = ''; aiPromptInput.value = ''; clientIdInput.value = ''; geminiKeyInput.value = '';
+            tbody.innerHTML = ''; clientIdInput.value = ''; geminiKeyInput.value = '';
+            
+            resetFiltersUI(); // Centralized reset for search, AI prompts, limits, sorting, and UI toggles
+            
             setupSection.classList.remove('hidden'); stopTimer(); setStatus("Cache cleared. Please log in again.");
         });
     </script>
