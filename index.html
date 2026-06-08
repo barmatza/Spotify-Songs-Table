@@ -1104,7 +1104,6 @@
                 }
 
                 const fetchPromises = chunks.map(async (chunk, index) => {
-                    const fetchPromises = chunks.map(async (chunk, index) => {
                     // Calculate if we need a strict subset for this batch based on previous results
                     let currentBatchMax = lastMaxResults;
                     if (lastMaxResults) {
