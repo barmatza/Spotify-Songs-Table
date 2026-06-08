@@ -3,83 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Spotify AI Filter (PKCE Flow)</title>
+    <title>Spotify AI Filter (Refactored)</title>
     <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: #121212;
-            color: #ffffff;
-            margin: 0;
-            padding: 20px;
-        }
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid #333;
-            padding-bottom: 20px;
-            margin-bottom: 20px;
-        }
-        .setup-group {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
-        }
-        input[type="text"], input[type="search"], input[type="password"] {
-            padding: 10px;
-            border-radius: 4px;
-            border: 1px solid #333;
-            background-color: #282828;
-            color: white;
-            width: 250px;
-        }
-        .search-container {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
-            width: 100%;
-            max-width: 600px;
-        }
-        #search-input {
-            flex-grow: 1;
-            font-size: 16px;
-            padding: 12px;
-        }
-        button {
-            background-color: #1DB954;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 50px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-        button:hover {
-            background-color: #1ed760;
-        }
-        button.ai-btn {
-            background-color: #8A2BE2; 
-        }
-        button.ai-btn:hover {
-            background-color: #9b4dca;
-        }
-        button.secondary-btn {
-            background-color: #333;
-            padding: 6px 12px;
-            font-size: 0.85em;
-        }
-        button.secondary-btn:hover {
-            background-color: #444;
-        }
-        button:disabled {
-            background-color: #555 !important;
-            cursor: not-allowed;
-        }
+        /* [CSS IS UNCHANGED FROM YOUR PREVIOUS VERSION] */
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: #121212; color: #ffffff; margin: 0; padding: 20px; }
+        header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333; padding-bottom: 20px; margin-bottom: 20px; }
+        .setup-group { display: flex; gap: 10px; align-items: center; margin-bottom: 15px; flex-wrap: wrap; }
+        input[type="text"], input[type="search"], input[type="password"], input[type="number"], select { padding: 10px; border-radius: 4px; border: 1px solid #333; background-color: #282828; color: white; width: 250px; }
+        .search-container { display: flex; gap: 10px; margin-bottom: 10px; width: 100%; max-width: 600px; }
+        button { background-color: #1DB954; color: white; border: none; padding: 10px 20px; border-radius: 50px; font-weight: bold; cursor: pointer; transition: background-color 0.3s; }
+        button:hover { background-color: #1ed760; }
+        button.ai-btn { background-color: #8A2BE2;  }
+        button.ai-btn:hover { background-color: #9b4dca; }
+        button.secondary-btn { background-color: #333; padding: 6px 12px; font-size: 0.85em; }
+        button.secondary-btn:hover { background-color: #444; }
+        button:disabled { background-color: #555 !important; cursor: not-allowed; }
         
-        /* API Monitor Styles */
         .dashboard-layout { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 15px; }
         .api-monitor { background-color: #181818; border: 1px solid #333; padding: 12px 18px; border-radius: 6px; font-size: 0.85em; min-width: 260px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
         .api-row { display: flex; justify-content: space-between; margin-bottom: 8px; align-items: center; }
@@ -91,115 +30,44 @@
         .status-limited { background: #ff4444; color: #fff; box-shadow: 0 0 8px rgba(255, 68, 68, 0.4); }
         .status-lite { background: #8A2BE2; color: #fff; box-shadow: 0 0 8px rgba(138, 43, 226, 0.4); }
 
-        /* Sortable Table Headers */
         th.sortable { cursor: pointer; user-select: none; transition: background 0.2s; position: relative; padding-right: 20px !important; }
         th.sortable:hover { background-color: #333; }
         th.sortable::after { content: '\21D5'; color: #555; font-size: 0.9em; position: absolute; right: 8px; }
         th.sortable.sort-asc::after { content: '\25B2'; color: #1DB954; }
         th.sortable.sort-desc::after { content: '\25BC'; color: #1DB954; }
 
-        .status-wrapper {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 10px;
-        }
-        #status {
-            color: #b3b3b3;
-            font-size: 0.9em;
-            transition: color 0.3s;
-        }
-        #timer {
-            font-family: monospace;
-            background-color: #282828;
-            color: #1ed760;
-            padding: 3px 8px;
-            border-radius: 4px;
-            font-size: 0.9em;
-            font-weight: bold;
-        }
-        /* Tab & Toggle Styles */
-        .tabs { 
-            display: flex; gap: 15px; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px; 
-        }
-        .tab-btn { 
-            background-color: transparent; color: #b3b3b3; border: none; font-size: 16px; font-weight: bold; cursor: pointer; padding: 5px 10px; border-radius: 0;
-        }
-        .tab-btn.active { 
-            color: #1DB954; border-bottom: 2px solid #1DB954; 
-        }
+        .status-wrapper { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+        #status { color: #b3b3b3; font-size: 0.9em; transition: color 0.3s; }
+        #timer { font-family: monospace; background-color: #282828; color: #1ed760; padding: 3px 8px; border-radius: 4px; font-size: 0.9em; font-weight: bold; }
+        
+        .tabs { display: flex; gap: 15px; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        .tab-btn { background-color: transparent; color: #b3b3b3; border: none; font-size: 16px; font-weight: bold; cursor: pointer; padding: 5px 10px; border-radius: 0; }
+        .tab-btn.active { color: #1DB954; border-bottom: 2px solid #1DB954; }
         .tab-btn:hover:not(.active) { color: white; }
-        .close-tab-btn {
-            background: none; border: none; color: #ff4444; margin-left: 8px; cursor: pointer; font-size: 14px; padding: 0;
-        }
+        .close-tab-btn { background: none; border: none; color: #ff4444; margin-left: 8px; cursor: pointer; font-size: 14px; padding: 0; }
         .close-tab-btn:hover { color: #ff0000; }
-        .toggle-btn { 
-            background-color: #333; padding: 6px 12px; font-size: 0.85em; border-radius: 4px; border: 1px solid #555; color: white; cursor: pointer; 
-        }
-        .toggle-btn.active { 
-            background-color: #1DB954; color: white; border-color: #1DB954; 
-        }
-        .selection-bar {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 15px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #333;
-        }
-        #selection-count {
-            color: #1ed760;
-            font-weight: bold;
-            font-size: 0.9em;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th, td {
-            text-align: left;
-            padding: 12px;
-            border-bottom: 1px solid #333;
-        }
-        th {
-            color: #b3b3b3;
-            text-transform: uppercase;
-            font-size: 0.8em;
-            letter-spacing: 1px;
-        }
-        tr:hover {
-            background-color: #282828;
-        }
-        .album-art {
-            width: 40px;
-            height: 40px;
-            border-radius: 4px;
-            vertical-align: middle;
-            margin-right: 15px;
-        }
-        input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-            cursor: pointer;
-            accent-color: #1DB954;
-        }
-        .hidden {
-            display: none !important;
-        }
-        .controls-container {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
+        
+        .toggle-btn { background-color: #333; padding: 6px 12px; font-size: 0.85em; border-radius: 4px; border: 1px solid #555; color: white; cursor: pointer; }
+        .toggle-btn.active { background-color: #1DB954; color: white; border-color: #1DB954; }
+        
+        .selection-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid #333; }
+        #selection-count { color: #1ed760; font-weight: bold; font-size: 0.9em; }
+        
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #333; }
+        th { color: #b3b3b3; text-transform: uppercase; font-size: 0.8em; letter-spacing: 1px; }
+        tr:hover { background-color: #282828; }
+        .album-art { width: 40px; height: 40px; border-radius: 4px; vertical-align: middle; margin-right: 15px; }
+        input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: #1DB954; }
+        .hidden { display: none !important; }
+        .controls-container { display: flex; flex-direction: column; gap: 10px; }
     </style>
 </head>
 <body>
 
     <header>
         <h1>My Liked Songs</h1>
-        <div>
-            <button id="clear-cache-btn" class="hidden">Clear Cache & Logout</button>
-        </div>
+        <div><button id="clear-cache-btn" class="hidden">Clear Cache & Logout</button></div>
     </header>
 
     <div class="controls-container">
@@ -214,7 +82,6 @@
                 <div id="status">Please enter your credentials and log in.</div>
                 <div id="timer" class="hidden">0.0s</div>
             </div>
-            
             <div id="api-monitor" class="api-monitor hidden">
                 <div style="border-bottom: 1px solid #333; padding-bottom: 6px; margin-bottom: 10px; font-weight: bold; text-align: center; color: #fff;">API Health Monitor</div>
                 <div class="api-row">
@@ -235,13 +102,11 @@
         </div>
 
         <div id="skipped-warning" class="hidden" style="background-color: #332b00; color: #ffb300; padding: 10px; border-radius: 4px; margin-bottom: 15px; border: 1px solid #ff9800; font-size: 0.9em; display: flex; justify-content: space-between; align-items: center;">
-            <div>
-                <strong>Rate Limit Reached:</strong> Gemini maxes out at 2,500 songs per request. The songs below were temporarily skipped.
-            </div>
-            <button id="process-skipped-btn" class="secondary-btn" style="background-color: #ff9800; color: #000; font-weight: bold; white-space: nowrap; margin-left: 15px;">Process Remaining</button>
+            <div><strong>Rate Limit Reached:</strong> Gemini maxes out at 2,500 songs per request. The songs below were temporarily skipped.</div>
+            <button id="process-skipped-btn" class="secondary-btn" style="background-color: #ff9800; color: #000; font-weight: bold; margin-left: 15px;">Process Remaining</button>
         </div>
 
-        <div id="search-container" class="search-container hidden" style="flex-direction: column; align-items: stretch; max-width: 800px; gap: 15px;">
+        <div id="search-container" class="search-container hidden" style="flex-direction: column; align-items: stretch; max-width: 900px; gap: 15px;">
             <div style="display: flex; gap: 10px;">
                 <input type="search" id="search-input" placeholder='Search or use tags (artist:"name" lang:english number:1-50)...' style="flex-grow: 1; font-size: 16px; padding: 12px;">
                 <button id="tags-help-btn" class="secondary-btn" title="View Search Tags" style="background-color: #444; font-weight: bold; font-size: 1.2em; padding: 0 15px;">?</button>
@@ -257,13 +122,19 @@
                     <li><code style="color:#fff; background:#181818; padding:2px 4px; border-radius:3px;">genre:name</code> - Specific genre match</li>
                     <li><code style="color:#fff; background:#181818; padding:2px 4px; border-radius:3px;">lang:name</code> - Specific language match</li>
                     <li><code style="color:#fff; background:#181818; padding:2px 4px; border-radius:3px;">number:X-Y</code> - Filter by master row</li>
-                    <li style="color: #8A2BE2; grid-column: span 2;"><em>Combine them! </em> <code>artist:"queen" rock lang:english number:1-20</code></li>
                 </ul>
             </div>
             
             <div style="display: flex; gap: 10px;">
                 <input type="text" id="ai-prompt-input" placeholder="AI Prompt: Describe the vibe (e.g., 'Upbeat running music')..." style="flex-grow: 1; font-size: 16px; padding: 12px; border-color: #8A2BE2;">
-                <input type="number" id="max-results-input" placeholder="Max (0=All)" min="0" style="width: 130px; font-size: 15px; padding: 12px; background-color: #282828; color: white; border: 1px solid #333; border-radius: 4px;">
+                <input type="number" id="max-results-input" placeholder="Max (0=All)" min="0" style="width: 130px; font-size: 15px; padding: 12px; border: 1px solid #333; border-radius: 4px;">
+                <select id="sort-dropdown" style="width: 150px; font-size: 15px; padding: 12px; border: 1px solid #333; border-radius: 4px; cursor: pointer;">
+                    <option value="">Sort: Default</option>
+                    <option value="name-asc">Title (A-Z)</option>
+                    <option value="name-desc">Title (Z-A)</option>
+                    <option value="artist-asc">Artist (A-Z)</option>
+                    <option value="artist-desc">Artist (Z-A)</option>
+                </select>
                 <button id="ai-filter-btn" class="ai-btn" style="min-width: 150px;">Filter with AI</button>
                 <button id="reset-filter-btn" style="background-color: #333;">Reset All</button>
             </div>
@@ -295,13 +166,12 @@
                 <th>Date Added</th>
             </tr>
         </thead>
-        <tbody id="songs-body">
-            </tbody>
+        <tbody id="songs-body"></tbody>
     </table>
 
     <script>
         // ==========================================
-        // CONFIGURATION
+        // 1. CONFIGURATION & STATE
         // ==========================================
         const REDIRECT_URI = 'https://barmatza.github.io/Spotify-Songs-Table/'; 
         const SCOPES = 'user-library-read playlist-modify-public playlist-modify-private';
@@ -313,1659 +183,604 @@
         const TOKEN_EXPIRY_KEY = 'spotify_token_expiry';
         
         let accessToken = null;
-        let allFetchedSongs = [];
-        let aiFilteredSongs = []; 
-        let skippedSongs = []; 
-        let rejectedSongs = []; 
-        let currentlyDisplayedSongs = []; 
-        let lastAiQuery = ""; 
-        let lastMaxResults = null; 
-        let latestAiTabId = null; 
-        let customTabs = []; 
-        
-        // Sorting State
-        let sortColumn = null; 
-        let sortAscending = true;
-        let customTabCounter = 0;
-        
-        // View States
-        let currentTab = 'main'; // 'main', 'ai', or custom id
-        let showingSelectedOnly = false;
+        let allFetchedSongs = [], aiFilteredSongs = [], skippedSongs = [], rejectedSongs = [];
+        let currentlyDisplayedSongs = [], customTabs = []; 
+        let lastAiQuery = "", lastMaxResults = null, latestAiTabId = null; 
+        let sortColumn = null, sortAscending = true, customTabCounter = 0;
+        let currentTab = 'main'; 
+        let showingSelectedOnly = false, abortFetch = false; 
 
-        // DOM Elements
-        const clientIdInput = document.getElementById('client-id-input');
-        const geminiKeyInput = document.getElementById('gemini-key-input');
-        const setupSection = document.getElementById('setup-section');
-        const loginBtn = document.getElementById('login-btn');
-        const clearCacheBtn = document.getElementById('clear-cache-btn');
-        const statusText = document.getElementById('status');
-        const timerBadge = document.getElementById('timer');
-        
-        const tabsContainer = document.getElementById('tabs-container');
-        const tabMain = document.getElementById('tab-main');
-        const tabRejected = document.getElementById('tab-rejected');
-        const tabSkipped = document.getElementById('tab-skipped');
-        const rejectedBadge = document.getElementById('rejected-badge');
-        const skippedBadge = document.getElementById('skipped-badge');
-        const skippedWarning = document.getElementById('skipped-warning');
-        const processSkippedBtn = document.getElementById('process-skipped-btn');
+        // ==========================================
+        // 2. DOM ELEMENTS
+        // ==========================================
+        const clientIdInput = document.getElementById('client-id-input'), geminiKeyInput = document.getElementById('gemini-key-input');
+        const setupSection = document.getElementById('setup-section'), loginBtn = document.getElementById('login-btn'), clearCacheBtn = document.getElementById('clear-cache-btn');
+        const statusText = document.getElementById('status'), timerBadge = document.getElementById('timer');
+        const tabsContainer = document.getElementById('tabs-container'), tabMain = document.getElementById('tab-main'), tabRejected = document.getElementById('tab-rejected'), tabSkipped = document.getElementById('tab-skipped');
+        const rejectedBadge = document.getElementById('rejected-badge'), skippedBadge = document.getElementById('skipped-badge');
+        const skippedWarning = document.getElementById('skipped-warning'), processSkippedBtn = document.getElementById('process-skipped-btn');
+        const searchContainer = document.getElementById('search-container'), searchInput = document.getElementById('search-input');
+        const tagsHelpBtn = document.getElementById('tags-help-btn'), tagsHelpPanel = document.getElementById('tags-help-panel'); 
+        const aiPromptInput = document.getElementById('ai-prompt-input'), maxResultsInput = document.getElementById('max-results-input');
+        const sortDropdown = document.getElementById('sort-dropdown'), aiFilterBtn = document.getElementById('ai-filter-btn'), resetFilterBtn = document.getElementById('reset-filter-btn'), saveTabBtn = document.getElementById('save-tab-btn');
+        const selectionBar = document.getElementById('selection-bar'), selectAllBtn = document.getElementById('select-all-btn'), selectNoneBtn = document.getElementById('select-none-btn');
+        const viewSelectedBtn = document.getElementById('view-selected-btn'), fetchGenresBtn = document.getElementById('fetch-genres-btn'), fetchGenresAiBtn = document.getElementById('fetch-genres-ai-btn'), fetchLangAiBtn = document.getElementById('fetch-lang-ai-btn'); 
+        const stopFetchBtn = document.getElementById('stop-fetch-btn'), createPlaylistBtn = document.getElementById('create-playlist-btn'), selectionCountText = document.getElementById('selection-count');
+        const table = document.getElementById('songs-table'), tbody = document.getElementById('songs-body'), apiMonitor = document.getElementById('api-monitor');
+        const spotifyStatusBadge = document.getElementById('spotify-status'), geminiStatusBadge = document.getElementById('gemini-status');
 
-        const searchContainer = document.getElementById('search-container');
-        const searchInput = document.getElementById('search-input');
-        const tagsHelpBtn = document.getElementById('tags-help-btn'); // NEW
-        const tagsHelpPanel = document.getElementById('tags-help-panel'); 
-        const aiPromptInput = document.getElementById('ai-prompt-input'); 
-        const maxResultsInput = document.getElementById('max-results-input'); // NEW
-        const aiFilterBtn = document.getElementById('ai-filter-btn');
-        const resetFilterBtn = document.getElementById('reset-filter-btn');
-        const saveTabBtn = document.getElementById('save-tab-btn');
-        
-        const selectionBar = document.getElementById('selection-bar');
-        const selectAllBtn = document.getElementById('select-all-btn');
-        const selectNoneBtn = document.getElementById('select-none-btn');
-        let abortFetch = false; // NEW: The global kill switch
+        // ==========================================
+        // 3. REFACTORED UTILITY FUNCTIONS
+        // ==========================================
+        function chunkArray(array, size) {
+            const chunks = [];
+            for (let i = 0; i < array.length; i += size) chunks.push(array.slice(i, i + size));
+            return chunks;
+        }
 
-        const viewSelectedBtn = document.getElementById('view-selected-btn');
-        const fetchGenresBtn = document.getElementById('fetch-genres-btn'); 
-        const fetchGenresAiBtn = document.getElementById('fetch-genres-ai-btn'); 
-        const fetchLangAiBtn = document.getElementById('fetch-lang-ai-btn'); // NEW
-        const stopFetchBtn = document.getElementById('stop-fetch-btn');
-        const createPlaylistBtn = document.getElementById('create-playlist-btn');
-        const selectionCountText = document.getElementById('selection-count');
-        
-        const table = document.getElementById('songs-table');
-        const tbody = document.getElementById('songs-body');
+        function toggleFetchUI(isFetching) {
+            abortFetch = false;
+            const buttons = [fetchGenresBtn, fetchGenresAiBtn, fetchLangAiBtn];
+            buttons.forEach(btn => {
+                btn.disabled = isFetching;
+                if (isFetching) btn.classList.add('hidden');
+                else btn.classList.remove('hidden');
+            });
 
-        // Dynamically setup table sorting based on column index
-        const headers = table.querySelectorAll('th');
-        const sortableColumns = [
-            { index: 2, key: 'name' },     // Title
-            { index: 3, key: 'artist' },   // Artist
-            { index: 4, key: 'album' },    // Album
-            { index: 5, key: 'genre' },    // Genre
-            { index: 6, key: 'language' }  // NEW: Language
-        ];
-        
-        sortableColumns.forEach(col => {
-            if(headers[col.index]) {
-                headers[col.index].classList.add('sortable');
-                headers[col.index].addEventListener('click', () => {
-                    // Toggle direction if clicking the same column, otherwise reset to Ascending
-                    if (sortColumn === col.key) {
-                        sortAscending = !sortAscending;
-                    } else {
-                        sortColumn = col.key;
-                        sortAscending = true;
-                    }
-                    
-                    // Update visual arrows
-                    headers.forEach(th => th.classList.remove('sort-asc', 'sort-desc'));
-                    headers[col.index].classList.add(sortAscending ? 'sort-asc' : 'sort-desc');
-                    
-                    updateView(); // Re-render the table with the new sort!
+            if (isFetching) {
+                stopFetchBtn.classList.remove('hidden');
+                stopFetchBtn.disabled = false;
+                stopFetchBtn.innerText = "Stop Fetching";
+                startTimer();
+            } else {
+                stopFetchBtn.classList.add('hidden');
+                stopTimer();
+            }
+        }
+
+        function getValidSelection(requireGemini = true) {
+            const selectedSongs = allFetchedSongs.filter(s => s.selected);
+            if (selectedSongs.length === 0) {
+                alert("Please select at least one song using the checkboxes.");
+                return null;
+            }
+            let geminiKey = null;
+            if (requireGemini) {
+                geminiKey = localStorage.getItem(GEMINI_KEY_KEY) || geminiKeyInput.value.trim();
+                if (!geminiKey) {
+                    alert("Please enter a Gemini API Key.");
+                    return null;
+                }
+            }
+            return { selectedSongs, geminiKey };
+        }
+
+        async function fetchGeminiData(prompt, geminiKey, chunkIndex = -1) {
+            const requestOptions = {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1, responseMimeType: "application/json" } })
+            };
+
+            updateApiStatus('gemini', 'active');
+            let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiKey}`, requestOptions);
+
+            if (response.status === 429) {
+                updateApiStatus('gemini', 'limited');
+                const log = chunkIndex >= 0 ? `Chunk ${chunkIndex + 1}` : 'Request';
+                console.warn(`${log}: Rate limit hit. Falling back to 3.1 Flash-Lite...`);
+                updateApiStatus('gemini', 'lite');
+                response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`, requestOptions);
+            }
+
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error?.message || `Gemini API failed with status ${response.status}`);
+            }
+
+            const data = await response.json();
+            return data.candidates[0].content.parts[0].text;
+        }
+
+        async function spotifyApiFetch(url, method = 'GET', body = null) {
+            const options = { method, headers: { 'Authorization': `Bearer ${accessToken}` } };
+            if (body) {
+                options.headers['Content-Type'] = 'application/json';
+                options.body = JSON.stringify(body);
+            }
+            const response = await fetch(url, options);
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error?.message || `Spotify API Error: ${response.status}`);
+            }
+            return response.json();
+        }
+
+        function updateActionTabsUI() {
+            if (rejectedSongs.length > 0) { tabRejected.classList.remove('hidden'); rejectedBadge.innerText = `(${rejectedSongs.length})`; } 
+            else tabRejected.classList.add('hidden');
+            if (skippedSongs.length > 0) { tabSkipped.classList.remove('hidden'); skippedBadge.innerText = `(${skippedSongs.length})`; } 
+            else tabSkipped.classList.add('hidden');
+        }
+
+        // ==========================================
+        // 4. UI ENGINE & SETUP
+        // ==========================================
+        table.querySelectorAll('th').forEach(th => {
+            const colMap = { 2: 'name', 3: 'artist', 4: 'album', 5: 'genre', 6: 'language' };
+            const index = Array.from(th.parentNode.children).indexOf(th);
+            if (colMap[index]) {
+                th.classList.add('sortable');
+                th.addEventListener('click', () => {
+                    sortAscending = (sortColumn === colMap[index]) ? !sortAscending : true;
+                    sortColumn = colMap[index];
+                    table.querySelectorAll('th').forEach(t => t.classList.remove('sort-asc', 'sort-desc'));
+                    th.classList.add(sortAscending ? 'sort-asc' : 'sort-desc');
+                    updateView();
                 });
             }
         });
 
-        const apiMonitor = document.getElementById('api-monitor');
-        const spotifyStatusBadge = document.getElementById('spotify-status');
-        const geminiStatusBadge = document.getElementById('gemini-status');
-
         function updateApiStatus(api, state) {
             const badge = api === 'spotify' ? spotifyStatusBadge : geminiStatusBadge;
-            badge.className = 'api-status'; // clear old classes
-            
+            badge.className = 'api-status'; 
             if (state === 'idle') { badge.classList.add('status-idle'); badge.innerText = 'IDLE'; }
             if (state === 'active') { badge.classList.add('status-active'); badge.innerText = api === 'gemini' ? '3.5 FLASH ACTIVE' : 'ACTIVE'; }
             if (state === 'limited') { badge.classList.add('status-limited'); badge.innerText = 'RATE LIMITED (429)'; }
             if (state === 'lite') { badge.classList.add('status-lite'); badge.innerText = '3.1 LITE ACTIVE'; }
         }
 
+        let loadingInterval, startTime;
+        function startTimer() {
+            timerBadge.classList.remove('hidden'); timerBadge.style.color = '#1ed760'; timerBadge.innerText = '0.0s'; startTime = Date.now();
+            loadingInterval = setInterval(() => timerBadge.innerText = `${((Date.now() - startTime) / 1000).toFixed(1)}s`, 100);
+        }
+        function stopTimer() {
+            clearInterval(loadingInterval);
+            if (startTime) { timerBadge.innerText = `Took ${((Date.now() - startTime) / 1000).toFixed(1)}s`; timerBadge.style.color = '#b3b3b3'; } 
+            else timerBadge.classList.add('hidden');
+        }
+        function setStatus(msg, isError = false) {
+            statusText.innerText = msg; statusText.style.color = isError ? "#ff4444" : "#b3b3b3";
+            if (isError) setTimeout(() => { statusText.style.color = "#b3b3b3"; }, 5000);
+        }
+
         // ==========================================
-        // MASTER VIEW ENGINE
+        // 5. MASTER VIEW & RENDERER
         // ==========================================
         function updateView() {
-            let baseList = allFetchedSongs;
-            skippedWarning.classList.add('hidden'); // Hide warning by default
+            let baseList = currentTab === 'ai' ? aiFilteredSongs : currentTab === 'rejected' ? rejectedSongs : currentTab === 'skipped' ? skippedSongs : allFetchedSongs;
+            if (currentTab.startsWith('custom-')) baseList = customTabs.find(t => t.id === currentTab)?.songs || baseList;
+            skippedWarning.classList.toggle('hidden', currentTab !== 'skipped');
 
-            // 1. Pick the base list depending on the active tab
-            // 1. Pick the base list depending on the active tab
-            if (currentTab === 'ai') {
-                baseList = aiFilteredSongs;
-            } else if (currentTab === 'rejected') {
-                baseList = rejectedSongs;
-            } else if (currentTab === 'skipped') {
-                baseList = skippedSongs;
-                skippedWarning.classList.remove('hidden'); 
-            } else if (currentTab.startsWith('custom-')) {
-                const tab = customTabs.find(t => t.id === currentTab);
-                if (tab) baseList = tab.songs;
-            }
-
-            // 2. Apply advanced text filter if any
             const rawQuery = searchInput.value.trim().toLowerCase();
             if (rawQuery) {
-                // Regex to find patterns like key:"value" or key:value
-                const filterRegex = /(\w+):(?:(["'])(.*?)\2|([^ ]+))/g;
-                let match;
-                const specificFilters = [];
-                let generalSearch = rawQuery;
-
-                // Extract all specific filters and remove them from the general search string
+                const specificFilters = []; let generalSearch = rawQuery;
+                const filterRegex = /(\w+):(?:(["'])(.*?)\2|([^ ]+))/g; let match;
                 while ((match = filterRegex.exec(rawQuery)) !== null) {
-                    const key = match[1];
-                    const value = match[3] || match[4]; // match[3] is quoted, match[4] is unquoted
-                    specificFilters.push({ key, value });
+                    specificFilters.push({ key: match[1], value: match[3] || match[4] });
                     generalSearch = generalSearch.replace(match[0], '');
                 }
                 generalSearch = generalSearch.trim();
 
                 baseList = baseList.filter(song => {
-                    // Check specific filters first
-                    let passesSpecific = true;
-                    for (const filter of specificFilters) {
-                        const { key, value } = filter;
-                        if (key === 'artist' && !song.artist.toLowerCase().includes(value)) passesSpecific = false;
-                        else if (key === 'album' && !song.album.toLowerCase().includes(value)) passesSpecific = false;
-                        else if (key === 'title' && !song.name.toLowerCase().includes(value)) passesSpecific = false;
-                        else if (key === 'genre' && !(song.genre && song.genre.toLowerCase().includes(value))) passesSpecific = false;
-                        else if ((key === 'language' || key === 'lang') && !(song.language && song.language.toLowerCase().includes(value))) passesSpecific = false;
-                        else if (key === 'number' || key === 'row') {
-                            // Support ranges like number:30-100 or specific like number:5
-                            const limits = value.split('-');
-                            const min = parseInt(limits[0]) || 0;
-                            const max = parseInt(limits[1]) || min; 
-                            
-                            // Get the absolute row index based on the master list
+                    for (const { key, value } of specificFilters) {
+                        if (key === 'artist' && !song.artist.toLowerCase().includes(value)) return false;
+                        if (key === 'album' && !song.album.toLowerCase().includes(value)) return false;
+                        if (key === 'title' && !song.name.toLowerCase().includes(value)) return false;
+                        if (key === 'genre' && !(song.genre && song.genre.toLowerCase().includes(value))) return false;
+                        if ((key === 'language' || key === 'lang') && !(song.language && song.language.toLowerCase().includes(value))) return false;
+                        if (key === 'number' || key === 'row') {
+                            const [min, max = min] = value.split('-').map(Number);
                             const pos = allFetchedSongs.findIndex(s => s.id === song.id) + 1;
-                            if (pos < min || pos > max) passesSpecific = false;
+                            if (pos < min || pos > max) return false;
                         }
                     }
-                    
-                    if (!passesSpecific) return false;
-
-                    // If it passes specifics, check if it matches the remaining general search
                     if (generalSearch) {
-                        return song.name.toLowerCase().includes(generalSearch) || 
-                               song.artist.toLowerCase().includes(generalSearch) || 
-                               song.album.toLowerCase().includes(generalSearch) ||
-                               (song.genre && song.genre.toLowerCase().includes(generalSearch)) ||
+                        return song.name.toLowerCase().includes(generalSearch) || song.artist.toLowerCase().includes(generalSearch) || 
+                               song.album.toLowerCase().includes(generalSearch) || (song.genre && song.genre.toLowerCase().includes(generalSearch)) ||
                                (song.language && song.language.toLowerCase().includes(generalSearch));
                     }
-                    
                     return true;
                 });
             }
 
-            // 3. Apply "Selected Only" toggle if active
-            if (showingSelectedOnly) {
-                baseList = baseList.filter(song => song.selected);
-            }
-
-            // 4. Apply Max Results Limit to Text Searches
+            if (showingSelectedOnly) baseList = baseList.filter(s => s.selected);
             const rawMax = parseInt(maxResultsInput.value.trim(), 10);
-            if (!isNaN(rawMax) && rawMax > 0) {
-                baseList = baseList.slice(0, rawMax);
-            }
+            if (!isNaN(rawMax) && rawMax > 0) baseList = baseList.slice(0, rawMax);
 
-            // 5. Apply Table Sorting
             if (sortColumn) {
                 baseList.sort((a, b) => {
-                    // Safely handle missing data (like un-fetched genres)
                     let valA = a[sortColumn] ? a[sortColumn].toString().toLowerCase() : '';
                     let valB = b[sortColumn] ? b[sortColumn].toString().toLowerCase() : '';
-                    
-                    if (valA < valB) return sortAscending ? -1 : 1;
-                    if (valA > valB) return sortAscending ? 1 : -1;
-                    return 0;
+                    return (valA < valB ? -1 : valA > valB ? 1 : 0) * (sortAscending ? 1 : -1);
                 });
             }
 
             renderTable(baseList);
-            updateSelectionCount();
+            selectionCountText.innerText = `${allFetchedSongs.filter(s => s.selected).length} song(s) selected`;
         }
 
-        function updateSelectionCount() {
-            const selectedCount = allFetchedSongs.filter(s => s.selected).length;
-            selectionCountText.innerText = `${selectedCount} song${selectedCount !== 1 ? 's' : ''} selected`;
-        }
-
-        function mapSongsWithSelection(songs) {
-            return songs.map(s => ({ ...s, selected: s.selected || false }));
-        }
-
-        // ==========================================
-        // TIMER LOGIC
-        // ==========================================
-        let loadingInterval;
-        let startTime;
-
-        function startTimer() {
-            timerBadge.classList.remove('hidden');
-            timerBadge.style.color = '#1ed760'; // Bright green while running
-            timerBadge.innerText = '0.0s';
-            startTime = Date.now();
-            
-            loadingInterval = setInterval(() => {
-                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-                timerBadge.innerText = `${elapsed}s`;
-            }, 100);
-        }
-
-        function stopTimer() {
-            clearInterval(loadingInterval);
-            if (startTime) {
-                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-                timerBadge.innerText = `Took ${elapsed}s`;
-                timerBadge.style.color = '#b3b3b3'; // Dim grey when finished
-            } else {
-                timerBadge.classList.add('hidden');
-            }
-        }
-
-        function setStatus(message, isError = false) {
-            statusText.innerText = message;
-            statusText.style.color = isError ? "#ff4444" : "#b3b3b3";
-            if (isError) {
-                setTimeout(() => { statusText.style.color = "#b3b3b3"; }, 5000);
-            }
-        }
-
-        // ==========================================
-        // PKCE CRYPTOGRAPHIC HELPERS
-        // ==========================================
-        const generateRandomString = (length) => {
-            const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-            const values = crypto.getRandomValues(new Uint8Array(length));
-            return values.reduce((acc, x) => acc + possible[x % possible.length], "");
-        };
-
-        const sha256 = async (plain) => {
-            const encoder = new TextEncoder();
-            const data = encoder.encode(plain);
-            return window.crypto.subtle.digest('SHA-256', data);
-        };
-
-        const base64encode = (input) => {
-            return btoa(String.fromCharCode(...new Uint8Array(input)))
-                .replace(/=/g, '')
-                .replace(/\+/g, '-')
-                .replace(/\//g, '_');
-        };
-
-        // ==========================================
-        // POPUP & AUTHENTICATION HANDLING
-        // ==========================================
-        const urlParams = new URLSearchParams(window.location.search);
-        let code = urlParams.get('code');
-        
-        if (window.opener && code) {
-            window.opener.postMessage({ type: 'spotify-auth-code', code: code }, '*');
-            window.close();
-        }
-
-        window.addEventListener('message', async (event) => {
-            if (event.data && event.data.type === 'spotify-auth-code') {
-                setStatus("Authenticating...");
-                startTimer();
-                await exchangeToken(event.data.code);
-            }
-        });
-
-        loginBtn.addEventListener('click', async () => {
-            const clientId = clientIdInput.value.trim();
-            const geminiKey = geminiKeyInput.value.trim();
-            
-            if (!clientId) {
-                alert("Please enter a valid Spotify Client ID.");
-                return;
-            }
-
-            localStorage.setItem(CLIENT_ID_KEY, clientId);
-            if (geminiKey) localStorage.setItem(GEMINI_KEY_KEY, geminiKey);
-
-            const codeVerifier = generateRandomString(64);
-            window.localStorage.setItem('code_verifier', codeVerifier); 
-            
-            const hashed = await sha256(codeVerifier);
-            const codeChallenge = base64encode(hashed);
-
-            const authUrl = new URL("https://accounts.spotify.com/authorize");
-            authUrl.search = new URLSearchParams({
-                client_id: clientId,
-                response_type: 'code',
-                redirect_uri: REDIRECT_URI,
-                scope: SCOPES,
-                code_challenge_method: 'S256',
-                code_challenge: codeChallenge,
-                show_dialog: true // <--- This forces Spotify to ask for the new permissions
-            }).toString();
-            
-            const width = 450, height = 600;
-            const left = (screen.width / 2) - (width / 2);
-            const top = (screen.height / 2) - (height / 2);
-            
-            window.open(authUrl.toString(), 'Spotify Login', `width=${width},height=${height},top=${top},left=${left}`);
-        });
-
-        async function exchangeToken(authCode) {
-            const codeVerifier = localStorage.getItem('code_verifier');
-            const clientId = localStorage.getItem(CLIENT_ID_KEY);
-
-            const payload = {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: new URLSearchParams({
-                    client_id: clientId,
-                    grant_type: 'authorization_code',
-                    code: authCode,
-                    redirect_uri: REDIRECT_URI,
-                    code_verifier: codeVerifier,
-                }),
-            };
-
-            try {
-                const response = await fetch('https://accounts.spotify.com/api/token', payload);
-                if (!response.ok) throw new Error('Token exchange failed');
-                
-                const data = await response.json();
-                accessToken = data.access_token;
-                
-                // NEW: Save the token and calculate its exact death-time (usually 3600s / 1 hour)
-                localStorage.setItem(TOKEN_KEY, accessToken);
-                localStorage.setItem(TOKEN_EXPIRY_KEY, Date.now() + (data.expires_in * 1000));
-                
-                localStorage.removeItem('code_verifier');
-                setupSection.classList.add('hidden');
-                clearCacheBtn.classList.remove('hidden');
-                
-                initApp();
-            } catch (error) {
-                console.error(error);
-                stopTimer();
-                setStatus("Authentication failed. Please check your Client ID and try again.", true);
-            }
-        }
-
-        // ==========================================
-        // CORE LOGIC & DATA FETCHING
-        // ==========================================
-        async function initApp() {
-            if (geminiKeyInput.value) {
-                localStorage.setItem(GEMINI_KEY_KEY, geminiKeyInput.value.trim());
-            }
-
-            const cachedSongs = localStorage.getItem(CACHE_KEY);
-            
-            if (cachedSongs) {
-                stopTimer(); 
-                setStatus("Loaded from cache.");
-                allFetchedSongs = mapSongsWithSelection(JSON.parse(cachedSongs)); 
-                
-                renderTable(allFetchedSongs);
-            } else if (accessToken) {
-                if(timerBadge.classList.contains('hidden')) startTimer();
-                
-                setStatus("Fetching songs from Spotify... This might take a moment.");
-                const songs = await fetchAllLikedSongs();
-                
-                stopTimer();
-                
-                if (songs.length > 0) {
-                    allFetchedSongs = mapSongsWithSelection(songs);
-                    // Save initial cache so you don't lose the songs if you accidentally refresh
-                    localStorage.setItem(CACHE_KEY, JSON.stringify(allFetchedSongs)); 
-               }
-            }
-            
-            if (allFetchedSongs.length > 0) {
-                searchContainer.classList.remove('hidden');
-                selectionBar.classList.remove('hidden');
-                tabsContainer.classList.remove('hidden');
-                apiMonitor.classList.remove('hidden'); // Show the monitor
-                updateView(); 
-            }
-        }
-
-        async function fetchAllLikedSongs() {
-            let allSongs = [];
-            // Bypassing the chat filter with string concatenation
-            let nextUrl = "https://" + "api.spotify.com/v1/me/tracks?limit=50";
-            let count = 0;
-
-            try {
-                while (nextUrl) {
-                    updateApiStatus('spotify', 'active');
-                    const response = await fetch(nextUrl, {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
-                    });
-                    if (response.status === 429) updateApiStatus('spotify', 'limited');
-
-                    if (!response.ok) throw new Error('Failed to fetch from Spotify');
-
-                    const data = await response.json();
-                    
-                    const formattedSongs = data.items.map(item => ({
-                        id: item.track.id,
-                        added_at: item.added_at,
-                        name: item.track.name,
-                        artist: item.track.artists.map(a => a.name).join(', '),
-                        artistId: item.track.artists[0]?.id, 
-                        album: item.track.album.name,
-                        image: item.track.album.images[2]?.url || '',
-                        selected: false,
-                        genre: 'Loading...', // Start with a placeholder
-                        language: 'Loading...' // NEW
-                    }));
-
-                    allSongs = allSongs.concat(formattedSongs);
-                    nextUrl = data.next; 
-                    count += formattedSongs.length;
-                    setStatus(`Fetching... (${count} retrieved)`);
-                }
-
-                updateApiStatus('spotify', 'idle');
-                return allSongs; // Return the UI list immediately!
-            } catch (error) {
-                console.error(error);
-                setStatus("Error fetching songs. Token may have expired.", true);
-                return [];
-            }
-        }
-
-        // ==========================================
-        // SELECTION LOGIC & TABS
-        // ==========================================
-        tbody.addEventListener('change', (event) => {
-            if (event.target.classList.contains('song-checkbox')) {
-                const songId = event.target.getAttribute('data-id');
-                const isChecked = event.target.checked;
-                
-                const song = allFetchedSongs.find(s => s.id === songId);
-                if (song) song.selected = isChecked;
-                
-                updateSelectionCount();
-            }
-        });
-
-        selectAllBtn.addEventListener('click', () => {
-            currentlyDisplayedSongs.forEach(song => {
-                const masterSong = allFetchedSongs.find(s => s.id === song.id);
-                if (masterSong) masterSong.selected = true;
-            });
-            updateView(); 
-        });
-
-        selectNoneBtn.addEventListener('click', () => {
-            allFetchedSongs.forEach(song => song.selected = false);
-            updateView(); 
-        });
-
-        viewSelectedBtn.addEventListener('click', () => {
-            showingSelectedOnly = !showingSelectedOnly;
-            if (showingSelectedOnly) {
-                viewSelectedBtn.classList.add('active');
-                viewSelectedBtn.innerText = "Showing Selected Only";
-            } else {
-                viewSelectedBtn.classList.remove('active');
-                viewSelectedBtn.innerText = "Show Selected Only";
-            }
-            updateView();
-        });
-
-        // Tab Management System
-        function switchTab(tabId) {
-            currentTab = tabId;
-            
-         // Update UI active states
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                if (btn.id === `tab-${tabId}` || 
-                   (tabId === 'main' && btn.id === 'tab-main') || 
-                   (tabId === 'rejected' && btn.id === 'tab-rejected') || 
-                   (tabId === 'skipped' && btn.id === 'tab-skipped')) {
-                    btn.classList.add('active');
-                } else {
-                    btn.classList.remove('active');
-                }
-            });
-            
-            // Clear text search when swapping tabs for a fresh view
-            searchInput.value = ''; 
-            updateView();
-        }
-
-        function closeCustomTab(tabId) {
-            customTabs = customTabs.filter(t => t.id !== tabId);
-            const btn = document.getElementById(`tab-${tabId}`);
-            if (btn) btn.remove();
-            
-            if (currentTab === tabId) {
-                switchTab('main'); // Revert to main if closing active tab
-            }
-        }
-
-        tabMain.addEventListener('click', () => switchTab('main'));
-        tabRejected.addEventListener('click', () => switchTab('rejected')); 
-        tabSkipped.addEventListener('click', () => switchTab('skipped'));
-
-        // Toggle the Cheat Sheet Panel
-        tagsHelpBtn.addEventListener('click', () => {
-            tagsHelpPanel.classList.toggle('hidden');
-        });
-
-        saveTabBtn.addEventListener('click', () => {
-            if (currentlyDisplayedSongs.length === 0) {
-                alert("There are no songs currently displayed to save.");
-                return;
-            }
-            
-            customTabCounter++;
-            const tabId = `custom-${customTabCounter}`;
-            
-            // 1. Get base name from search inputs
-            const rawInputName = searchInput.value.trim() || aiPromptInput.value.trim();
-            let tabName = rawInputName;
-            
-            // 2. Auto-generate a default name if the inputs are empty
-            if (!tabName) {
-                if (showingSelectedOnly) tabName = 'Selected Songs';
-                else tabName = `Saved View ${customTabCounter}`;
-            }
-
-            // 3. Prepend parent tab name if NOT on the Main tab
-            if (currentTab !== 'main') {
-                let parentName = "";
-                if (currentTab === 'ai') parentName = 'AI Results';
-                else if (currentTab === 'rejected') parentName = 'Filtered Out';
-                else if (currentTab === 'skipped') parentName = 'Unprocessed';
-                else if (currentTab.startsWith('custom-')) {
-                    const parent = customTabs.find(t => t.id === currentTab);
-                    if (parent) parentName = parent.name;
-                }
-
-                if (parentName) {
-                    if (!rawInputName && !showingSelectedOnly) {
-                         tabName = `${parentName} (Saved)`;
-                    } else {
-                         tabName = `${parentName} - ${tabName}`;
-                    }
-                }
-            }
-
-            // 4. Capture exactly what the user intends to save
-            let songsToSave = currentlyDisplayedSongs;
-            
-            // If they have manually selected songs using the checkboxes, save ONLY those
-            const checkedSongs = currentlyDisplayedSongs.filter(s => s.selected);
-            if (checkedSongs.length > 0) {
-                // Deep clone the objects so they don't stay "selected" inside the new tab
-                songsToSave = checkedSongs.map(song => ({ ...song, selected: false }));
-            } else {
-                // Otherwise save the whole view as they see it, ensuring selections are cleared
-                songsToSave = currentlyDisplayedSongs.map(song => ({ ...song, selected: false }));
-            }
-
-            // Reset the global selection state and UI toggle
-            allFetchedSongs.forEach(s => s.selected = false);
-            showingSelectedOnly = false;
-            viewSelectedBtn.classList.remove('active');
-            viewSelectedBtn.innerText = "Show Selected Only";
-
-            const newTab = {
-                id: tabId,
-                name: tabName,
-                songs: songsToSave,
-                textQuery: searchInput.value.trim(),
-                aiQuery: aiPromptInput.value.trim() || lastAiQuery 
-            };
-            customTabs.push(newTab);
-
-            // Create tab button HTML
-            const tabBtn = document.createElement('button');
-            tabBtn.className = 'tab-btn';
-            tabBtn.id = `tab-${tabId}`;
-            tabBtn.innerHTML = `${tabName} <span style="font-size: 0.8em; color: #888;">(${newTab.songs.length})</span> <span class="close-tab-btn" data-id="${tabId}">✖</span>`;
-            
-            // Listeners for clicking the tab or the 'X' button
-            tabBtn.addEventListener('click', (e) => {
-                if (e.target.classList.contains('close-tab-btn')) {
-                    e.stopPropagation();
-                    closeCustomTab(e.target.getAttribute('data-id'));
-                    return;
-                }
-                switchTab(tabId);
-            });
-
-            tabsContainer.appendChild(tabBtn);
-            switchTab(tabId);
-            setStatus(`Created new tab: ${tabName}`);
-        });
-
-        // ==========================================
-        // FILTERING: STANDARD & AI
-        // ==========================================
-        searchInput.addEventListener('input', updateView);
-        maxResultsInput.addEventListener('input', updateView); // Triggers real-time table trim
-
-        aiFilterBtn.addEventListener('click', async () => {
-            const query = aiPromptInput.value.trim(); 
-            const rawMax = parseInt(maxResultsInput.value.trim(), 10);
-            // Treat 0 (or any negative number) as explicitly unlimited
-            const maxResults = (isNaN(rawMax) || rawMax <= 0) ? null : rawMax; 
-            const geminiKey = localStorage.getItem(GEMINI_KEY_KEY) || geminiKeyInput.value.trim();
-            const selectedSongs = allFetchedSongs.filter(s => s.selected);
-
-            if (selectedSongs.length === 0) {
-                alert("Please select at least one song using the checkboxes before filtering with AI.\n\nTip: Click 'Select All' to search your entire visible library.");
-                return;
-            }
-            if (!query) {
-                alert("Please enter a prompt in the AI Prompt box first.");
-                return;
-            }
-            if (!geminiKey) {
-                alert("Please enter a Gemini API Key.");
-                return;
-            }
-
-            lastAiQuery = query; 
-            lastMaxResults = maxResults;
-            aiFilterBtn.disabled = true;
-            aiFilterBtn.innerText = "Thinking...";
-            setStatus(`Sending ${selectedSongs.length} selected songs to Gemini AI... Please wait.`);
-            startTimer();
-
-            try {
-                // === HARD RESET ARRAYS & UI FOR BRAND NEW FILTER ===
-                aiFilteredSongs = [];
-                rejectedSongs = [];
-                skippedSongs = []; 
-                tabRejected.classList.add('hidden');
-                tabSkipped.classList.add('hidden');
-
-                // === NEW LIMIT LOGIC ===
-                const MAX_SONGS_PER_CHUNK = 500;
-                const MAX_CHUNKS = 5;
-                const TOTAL_LIMIT = MAX_SONGS_PER_CHUNK * MAX_CHUNKS; // 2500 max songs
-
-                let songsToProcess = selectedSongs;
-
-                // Slice the array if it exceeds the limit
-                if (selectedSongs.length > TOTAL_LIMIT) {
-                    songsToProcess = selectedSongs.slice(0, TOTAL_LIMIT);
-                    skippedSongs = selectedSongs.slice(TOTAL_LIMIT);
-                }
-
-                const minimizedSongs = songsToProcess.map(s => ({
-                    id: s.id, name: s.name, artist: s.artist, album: s.album, genre: s.genre
-                }));
-
-                const chunks = [];
-                for (let i = 0; i < minimizedSongs.length; i += MAX_SONGS_PER_CHUNK) {
-                    chunks.push(minimizedSongs.slice(i, i + MAX_SONGS_PER_CHUNK));
-                }
-
-                const fetchPromises = chunks.map(async (chunk, index) => {
-                    const prompt = `You are a music librarian API. I will provide a JSON array of songs in a user's library.
-                    The user has requested to filter this library based on the following criteria: "${query}".
-                    ${maxResults ? `CRITICAL LIMIT: You MUST return a MAXIMUM of ${maxResults} song IDs. Select only the absolute best matches.` : ''}
-                    Your task: Return a raw JSON array of ONLY the string IDs of the songs that match or fit the vibe of this criteria.
-                    Do not include markdown blocks like \`\`\`json. Return ONLY the raw array [ "id1", "id2" ].
-                    Song Library:
-                    ${JSON.stringify(chunk)}`;
-
-                    const requestOptions = {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            contents: [{ parts: [{ text: prompt }] }],
-                            generationConfig: { 
-                                temperature: 0.1,
-                                maxOutputTokens: 8192,
-                                responseMimeType: "application/json" 
-                            } 
-                        })
-                    };
-
-                    updateApiStatus('gemini', 'active');
-                    let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiKey}`, requestOptions);
-
-                    if (response.status === 429) {
-                        updateApiStatus('gemini', 'limited');
-                        console.warn(`Chunk ${index + 1}: Rate limit hit. Falling back to 3.1 Flash-Lite...`);
-                        updateApiStatus('gemini', 'lite');
-                        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`, requestOptions);
-                    }
-
-                    // 3. Catch any other errors
-                    if (!response.ok) {
-                        const errorData = await response.json().catch(() => ({}));
-                        throw new Error(errorData.error?.message || `Chunk ${index + 1} failed.`);
-                    }
-
-                    const data = await response.json();
-                    const resultText = data.candidates[0].content.parts[0].text;
-                    
-                    const matches = resultText.match(/"([a-zA-Z0-9]+)"/g);
-                    const matchingIds = matches ? matches.map(id => id.replace(/"/g, '')) : [];
-                    
-                    return matchingIds;
-                });
-
-                const resultsArray = await Promise.all(fetchPromises);
-                let allMatchingIds = resultsArray.flat();
-
-                // Hard-enforce the limit just in case the AI ignores the prompt instruction
-                if (maxResults && allMatchingIds.length > maxResults) {
-                    allMatchingIds = allMatchingIds.slice(0, maxResults);
-                }
-
-                // 1. The songs the AI successfully matched
-                const filteredSongs = songsToProcess.filter(song => allMatchingIds.includes(song.id));
-                
-                // 2. The songs the AI dropped or rejected
-                const newlyRejected = songsToProcess.filter(song => !allMatchingIds.includes(song.id));
-                newlyRejected.forEach(song => song.selected = false); 
-                rejectedSongs = newlyRejected;
-
-                // 3. Dynamically Generate a New AI Tab
-                customTabCounter++;
-                const tabId = `custom-${customTabCounter}`;
-                // Truncate the query if it's super long so it doesn't break the UI
-                const displayQuery = query.length > 25 ? query.substring(0, 25) + '...' : query;
-                const tabName = `[AI] ${displayQuery}`;
-                
-                latestAiTabId = tabId; // Track this specific tab for "Process Remaining"
-                
-                const newTab = {
-                    id: tabId,
-                    name: tabName,
-                    songs: filteredSongs,
-                    aiQuery: query // Remembers the exact prompt used for THIS tab
-                };
-                customTabs.push(newTab);
-
-                // Create the tab button UI
-                const tabBtn = document.createElement('button');
-                tabBtn.className = 'tab-btn';
-                tabBtn.id = `tab-${tabId}`;
-                tabBtn.innerHTML = `${tabName} <span style="font-size: 0.8em; color: #888;" id="badge-${tabId}">(${filteredSongs.length})</span> <span class="close-tab-btn" data-id="${tabId}">✖</span>`;
-                
-                tabBtn.addEventListener('click', (e) => {
-                    if (e.target.classList.contains('close-tab-btn')) {
-                        e.stopPropagation();
-                        closeCustomTab(e.target.getAttribute('data-id'));
-                        return;
-                    }
-                    switchTab(tabId);
-                });
-
-                // Insert BEFORE the Filtered Out tab so it stays organized!
-                tabsContainer.insertBefore(tabBtn, tabRejected);
-
-                // Handle Filtered Out Tab UI
-                if (rejectedSongs.length > 0) {
-                    tabRejected.classList.remove('hidden');
-                    rejectedBadge.innerText = `(${rejectedSongs.length})`;
-                }
-
-                // Handle Skipped Songs Tab UI
-                if (skippedSongs.length > 0) {
-                    tabSkipped.classList.remove('hidden');
-                    skippedBadge.innerText = `(${skippedSongs.length})`;
-                } else {
-                    tabSkipped.classList.add('hidden');
-                }
-
-                switchTab(tabId); 
-                
-                if (skippedSongs.length > 0) {
-                    setStatus(`Gemini found ${filteredSongs.length} matches. ${skippedSongs.length} songs were skipped due to limits.`);
-                } else {
-                    setStatus(`Gemini found ${filteredSongs.length} matches out of the ${songsToProcess.length} songs you selected.`);
-                }
-
-            } catch (error) {
-                console.error("Full caught error:", error);
-                setStatus(`AI Filter Failed - ${error.message}`, true);
-            } finally {
-                stopTimer();
-                updateApiStatus('gemini', 'idle');
-                aiFilterBtn.disabled = false;
-                aiFilterBtn.innerText = "Filter with AI";
-            }
-        });
-
-        // ==========================================
-        // PROCESS REMAINING / SKIPPED SONGS
-        // ==========================================
-        processSkippedBtn.addEventListener('click', async () => {
-            const geminiKey = localStorage.getItem(GEMINI_KEY_KEY) || geminiKeyInput.value.trim();
-            
-            if (skippedSongs.length === 0) return;
-            
-            // Extract the query from the tab that actually generated these skipped songs
-            let queryToUse = lastAiQuery; 
-            if (latestAiTabId) {
-                const aiTab = customTabs.find(t => t.id === latestAiTabId);
-                if (aiTab && aiTab.aiQuery) queryToUse = aiTab.aiQuery;
-            }
-
-            if (!queryToUse) {
-                alert("No AI prompt found for this batch. Please run a new AI filter."); 
-                return;
-            }
-
-            processSkippedBtn.disabled = true;
-            processSkippedBtn.innerText = "Processing...";
-            setStatus(`Sending next batch using prompt: "${queryToUse}"...`);
-            startTimer();
-
-            try {
-                const MAX_SONGS_PER_CHUNK = 500;
-                const MAX_CHUNKS = 5;
-                const TOTAL_LIMIT = MAX_SONGS_PER_CHUNK * MAX_CHUNKS;
-
-                let songsToProcess = skippedSongs;
-                let newSkipped = [];
-
-                if (skippedSongs.length > TOTAL_LIMIT) {
-                    songsToProcess = skippedSongs.slice(0, TOTAL_LIMIT);
-                    newSkipped = skippedSongs.slice(TOTAL_LIMIT);
-                }
-
-                const minimizedSongs = songsToProcess.map(s => ({
-                    id: s.id, name: s.name, artist: s.artist, album: s.album, genre: s.genre
-                }));
-
-                const chunks = [];
-                for (let i = 0; i < minimizedSongs.length; i += MAX_SONGS_PER_CHUNK) {
-                    chunks.push(minimizedSongs.slice(i, i + MAX_SONGS_PER_CHUNK));
-                }
-
-                const fetchPromises = chunks.map(async (chunk, index) => {
-                    // Calculate if we need a strict subset for this batch based on previous results
-                    let currentBatchMax = lastMaxResults;
-                    if (lastMaxResults) {
-                        currentBatchMax = lastMaxResults - aiFilteredSongs.length;
-                        if (currentBatchMax <= 0) return []; // Safely abort fetch if we already hit the global limit
-                    }
-
-                    const prompt = `You are a music librarian API. I will provide a JSON array of songs in a user's library.
-                    The user has requested to filter this library based on the following criteria: "${queryToUse}".
-                    ${currentBatchMax ? `CRITICAL LIMIT: You MUST return a MAXIMUM of ${currentBatchMax} song IDs.` : ''}
-                    Your task: Return a raw JSON array of ONLY the string IDs of the songs that match or fit the vibe of this criteria.
-                    Do not include markdown blocks like \`\`\`json. Return ONLY the raw array [ "id1", "id2" ].
-                    Song Library:
-                    ${JSON.stringify(chunk)}`;
-
-                    const requestOptions = {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            contents: [{ parts: [{ text: prompt }] }],
-                            generationConfig: { 
-                                temperature: 0.1, maxOutputTokens: 8192, responseMimeType: "application/json" 
-                            } 
-                        })
-                    };
-
-                    updateApiStatus('gemini', 'active');
-                    let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiKey}`, requestOptions);
-
-                    if (response.status === 429) {
-                        updateApiStatus('gemini', 'limited');
-                        console.warn(`Chunk ${index + 1}: Rate limit hit. Falling back to 3.1 Flash-Lite...`);
-                        updateApiStatus('gemini', 'lite');
-                        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`, requestOptions);
-                    }
-
-                    if (!response.ok) {
-                        const errorData = await response.json().catch(() => ({}));
-                        throw new Error(errorData.error?.message || `Chunk ${index + 1} failed.`);
-                    }
-
-                    const data = await response.json();
-                    const resultText = data.candidates[0].content.parts[0].text;
-                    const matches = resultText.match(/"([a-zA-Z0-9]+)"/g);
-                    return matches ? matches.map(id => id.replace(/"/g, '')) : [];
-                });
-
-                const resultsArray = await Promise.all(fetchPromises);
-                let allMatchingIds = resultsArray.flat();
-
-                // Hard-enforce the limit for the current batch
-                if (lastMaxResults) {
-                    const remainingAllowed = lastMaxResults - aiFilteredSongs.length;
-                    if (allMatchingIds.length > remainingAllowed) {
-                        allMatchingIds = allMatchingIds.slice(0, remainingAllowed);
-                    }
-                }
-
-                const newFiltered = songsToProcess.filter(song => allMatchingIds.includes(song.id));
-                const newRejected = songsToProcess.filter(song => !allMatchingIds.includes(song.id));
-                newRejected.forEach(song => song.selected = false);
-
-                // === COMBINE OLD AND NEW RESULTS ===
-                rejectedSongs = [...rejectedSongs, ...newRejected];
-                skippedSongs = newSkipped; // Update remaining
-
-                // Find the latest AI tab to append to
-                if (latestAiTabId) {
-                    const aiTab = customTabs.find(t => t.id === latestAiTabId);
-                    if (aiTab) {
-                        aiTab.songs = [...aiTab.songs, ...newFiltered];
-                        const customBadge = document.getElementById(`badge-${latestAiTabId}`);
-                        if (customBadge) customBadge.innerText = `(${aiTab.songs.length})`;
-                    }
-                }
-
-                // Update Badges for rejected/skipped
-                if (rejectedSongs.length > 0) {
-                    tabRejected.classList.remove('hidden');
-                    rejectedBadge.innerText = `(${rejectedSongs.length})`;
-                }
-                if (skippedSongs.length > 0) {
-                    tabSkipped.classList.remove('hidden');
-                    skippedBadge.innerText = `(${skippedSongs.length})`;
-                } else {
-                    tabSkipped.classList.add('hidden');
-                }
-
-                if (latestAiTabId) switchTab(latestAiTabId); 
-                setStatus(`Appended ${newFiltered.length} new matches! ${skippedSongs.length} songs remaining.`);
-
-            } catch (error) {
-                console.error("Batch error:", error);
-                setStatus(`Batch Filter Failed - ${error.message}`, true);
-            } finally {
-                stopTimer();
-                updateApiStatus('gemini', 'idle');
-                processSkippedBtn.disabled = false;
-                processSkippedBtn.innerText = "Process Remaining";
-            }
-        });
-
-        resetFilterBtn.addEventListener('click', () => {
-            searchInput.value = '';
-            aiPromptInput.value = ''; 
-            maxResultsInput.value = ''; // Clears the limits
-            showingSelectedOnly = false;
-            viewSelectedBtn.classList.remove('active');
-            viewSelectedBtn.innerText = "Show Selected Only";
-            updateView();
-            setStatus("Filters reset.");
-        });
-
-        // ==========================================
-        // UI RENDERING
-        // ==========================================
         function renderTable(songs) {
-            currentlyDisplayedSongs = songs; 
-            tbody.innerHTML = ''; 
-            
+            currentlyDisplayedSongs = songs; tbody.innerHTML = ''; 
             songs.forEach((song, index) => {
-                const dateAdded = new Date(song.added_at).toLocaleDateString();
                 const tr = document.createElement('tr');
-                
                 tr.innerHTML = `
-                    <td>
-                        <input type="checkbox" class="song-checkbox" data-id="${song.id}" ${song.selected ? 'checked' : ''}>
-                    </td>
+                    <td><input type="checkbox" class="song-checkbox" data-id="${song.id}" ${song.selected ? 'checked' : ''}></td>
                     <td>${index + 1}</td>
-                    <td>
-                        <img src="${song.image}" class="album-art" alt="Album art">
-                        <span style="font-weight:bold; color:white; vertical-align:middle;">${song.name}</span>
-                    </td>
-                    <td style="color:#b3b3b3;">${song.artist}</td>
-                    <td>${song.album}</td>
+                    <td><img src="${song.image}" class="album-art" alt=""><span style="font-weight:bold; color:white; vertical-align:middle;">${song.name}</span></td>
+                    <td style="color:#b3b3b3;">${song.artist}</td><td>${song.album}</td>
                     <td class="genre-cell-${song.artistId}" style="font-size: 0.85em; color: #b3b3b3; text-transform: capitalize;">${song.genre || 'Loading...'}</td>
                     <td class="lang-cell-${song.id}" style="font-size: 0.85em; color: #b3b3b3;">${song.language || 'Loading...'}</td>
-                    <td>${dateAdded}</td>
-                `;
+                    <td>${new Date(song.added_at).toLocaleDateString()}</td>`;
                 tbody.appendChild(tr);
             });
-            
             table.classList.remove('hidden');
         }
 
-        clearCacheBtn.addEventListener('click', () => {
-            localStorage.removeItem(CACHE_KEY);
-            localStorage.removeItem(CLIENT_ID_KEY);
-            localStorage.removeItem(GEMINI_KEY_KEY);
-            localStorage.removeItem(TOKEN_KEY);
-            localStorage.removeItem(TOKEN_EXPIRY_KEY);
-            accessToken = null;
-            allFetchedSongs = [];
-            currentlyDisplayedSongs = [];
-            aiFilteredSongs = [];
-            skippedSongs = [];
-            lastAiQuery = "";
-            customTabs = [];
-            customTabCounter = 0;
+        // ==========================================
+        // 6. PKCE AUTH & INITIALIZATION
+        // ==========================================
+        loginBtn.addEventListener('click', async () => {
+            const clientId = clientIdInput.value.trim();
+            if (!clientId) return alert("Please enter a valid Spotify Client ID.");
+            localStorage.setItem(CLIENT_ID_KEY, clientId);
+            if (geminiKeyInput.value.trim()) localStorage.setItem(GEMINI_KEY_KEY, geminiKeyInput.value.trim());
+
+            const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            const verifier = crypto.getRandomValues(new Uint8Array(64)).reduce((acc, x) => acc + possible[x % possible.length], "");
+            localStorage.setItem('code_verifier', verifier); 
             
-            // Remove dynamically generated custom tabs from the UI
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-                if (btn.id !== 'tab-main' && btn.id !== 'tab-rejected' && btn.id !== 'tab-skipped') btn.remove();
-            });
-            
-            switchTab('main');
-            tabRejected.classList.add('hidden');
-            tabSkipped.classList.add('hidden');
-            latestAiTabId = null;
-            
-            tbody.innerHTML = '';
-            table.classList.add('hidden');
-            searchContainer.classList.add('hidden');
-            selectionBar.classList.add('hidden');
-            tabsContainer.classList.add('hidden');
-            searchInput.value = ''; 
-            aiPromptInput.value = ''; // Clears the AI box on logout
-            setupSection.classList.remove('hidden');
-            clearCacheBtn.classList.add('hidden');
-            clientIdInput.value = '';
-            geminiKeyInput.value = '';
-            
-            stopTimer();
-            setStatus("Cache and credentials cleared. Please enter credentials to start over.");
+            const hashed = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier));
+            const codeChallenge = btoa(String.fromCharCode(...new Uint8Array(hashed))).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
+
+            const authUrl = new URL("https://accounts.spotify.com/authorize");
+            authUrl.search = new URLSearchParams({ client_id: clientId, response_type: 'code', redirect_uri: REDIRECT_URI, scope: SCOPES, code_challenge_method: 'S256', code_challenge: codeChallenge, show_dialog: true }).toString();
+            window.open(authUrl.toString(), 'Spotify Login', `width=450,height=600,top=${(screen.height/2)-300},left=${(screen.width/2)-225}`);
         });
+
+        window.addEventListener('message', async (e) => {
+            if (e.data?.type === 'spotify-auth-code') {
+                setStatus("Authenticating..."); startTimer();
+                try {
+                    const data = await fetch('https://accounts.spotify.com/api/token', {
+                        method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: new URLSearchParams({ client_id: localStorage.getItem(CLIENT_ID_KEY), grant_type: 'authorization_code', code: e.data.code, redirect_uri: REDIRECT_URI, code_verifier: localStorage.getItem('code_verifier') }),
+                    }).then(r => r.json());
+                    
+                    accessToken = data.access_token;
+                    localStorage.setItem(TOKEN_KEY, accessToken); localStorage.setItem(TOKEN_EXPIRY_KEY, Date.now() + (data.expires_in * 1000));
+                    localStorage.removeItem('code_verifier'); setupSection.classList.add('hidden'); clearCacheBtn.classList.remove('hidden');
+                    initApp();
+                } catch { stopTimer(); setStatus("Auth failed. Check Client ID.", true); }
+            }
+        });
+
+        if (new URLSearchParams(window.location.search).get('code') && window.opener) { window.opener.postMessage({ type: 'spotify-auth-code', code: new URLSearchParams(window.location.search).get('code') }, '*'); window.close(); }
 
         window.addEventListener('DOMContentLoaded', () => {
-            const savedClientId = localStorage.getItem(CLIENT_ID_KEY);
-            const savedGeminiKey = localStorage.getItem(GEMINI_KEY_KEY);
-            
-            if (savedClientId) clientIdInput.value = savedClientId;
-            if (savedGeminiKey) geminiKeyInput.value = savedGeminiKey;
-
-            // NEW: Check if we have a token AND if it is still alive
+            if (localStorage.getItem(CLIENT_ID_KEY)) clientIdInput.value = localStorage.getItem(CLIENT_ID_KEY);
+            if (localStorage.getItem(GEMINI_KEY_KEY)) geminiKeyInput.value = localStorage.getItem(GEMINI_KEY_KEY);
             const savedExpiry = localStorage.getItem(TOKEN_EXPIRY_KEY);
-            if (savedExpiry && Date.now() < parseInt(savedExpiry)) {
-                accessToken = localStorage.getItem(TOKEN_KEY);
-            } else {
-                // The token is dead or missing. Clean it up.
-                localStorage.removeItem(TOKEN_KEY);
-                localStorage.removeItem(TOKEN_EXPIRY_KEY);
-                accessToken = null;
-            }
+            
+            if (savedExpiry && Date.now() < parseInt(savedExpiry)) accessToken = localStorage.getItem(TOKEN_KEY);
+            else { localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(TOKEN_EXPIRY_KEY); accessToken = null; }
 
             if (localStorage.getItem(CACHE_KEY)) {
-                setupSection.classList.add('hidden');
-                clearCacheBtn.classList.remove('hidden');
-                initApp();
-                
-                // If the cache exists but the token is dead, warn the user
-                if (!accessToken) {
-                    setStatus("Your Spotify session expired. Please 'Clear Cache & Logout' and reconnect to create playlists.", true);
-                }
+                setupSection.classList.add('hidden'); clearCacheBtn.classList.remove('hidden'); initApp();
+                if (!accessToken) setStatus("Your Spotify session expired. Reconnect to create playlists.", true);
             }
         });
 
+        async function initApp() {
+            if (geminiKeyInput.value) localStorage.setItem(GEMINI_KEY_KEY, geminiKeyInput.value.trim());
+            const cached = localStorage.getItem(CACHE_KEY);
+            
+            if (cached) {
+                stopTimer(); setStatus("Loaded from cache.");
+                allFetchedSongs = JSON.parse(cached).map(s => ({ ...s, selected: s.selected || false }));
+                renderTable(allFetchedSongs);
+            } else if (accessToken) {
+                if (timerBadge.classList.contains('hidden')) startTimer();
+                setStatus("Fetching songs from Spotify...");
+                allFetchedSongs = await fetchAllLikedSongs();
+                stopTimer();
+                if (allFetchedSongs.length > 0) localStorage.setItem(CACHE_KEY, JSON.stringify(allFetchedSongs));
+            }
+            if (allFetchedSongs.length > 0) [searchContainer, selectionBar, tabsContainer, apiMonitor].forEach(e => e.classList.remove('hidden'));
+            updateView(); 
+        }
+
+        async function fetchAllLikedSongs() {
+            let allSongs = [], nextUrl = "api.spotify.com/v1/me/tracks?limit=50";
+            try {
+                while (nextUrl) {
+                    updateApiStatus('spotify', 'active');
+                    const response = await fetch(nextUrl, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+                    if (response.status === 429) updateApiStatus('spotify', 'limited');
+                    if (!response.ok) throw new Error('Failed API Call');
+                    const data = await response.json();
+                    
+                    allSongs = allSongs.concat(data.items.map(i => ({
+                        id: i.track.id, added_at: i.added_at, name: i.track.name, artist: i.track.artists.map(a => a.name).join(', '),
+                        artistId: i.track.artists[0]?.id, album: i.track.album.name, image: i.track.album.images[2]?.url || '',
+                        selected: false, genre: 'Loading...', language: 'Loading...'
+                    })));
+                    nextUrl = data.next; setStatus(`Fetching... (${allSongs.length} retrieved)`);
+                }
+                updateApiStatus('spotify', 'idle'); return allSongs;
+            } catch (e) { setStatus("Error fetching. Token may have expired.", true); return []; }
+        }
+
         // ==========================================
-        // EMERGENCY BRAKE
+        // 7. EVENTS & TABS LOGIC
         // ==========================================
-        stopFetchBtn.addEventListener('click', () => {
-            abortFetch = true;
-            stopFetchBtn.disabled = true;
-            stopFetchBtn.innerText = "Stopping...";
+        tbody.addEventListener('change', (e) => {
+            if (e.target.classList.contains('song-checkbox')) {
+                const song = allFetchedSongs.find(s => s.id === e.target.getAttribute('data-id'));
+                if (song) song.selected = e.target.checked;
+                updateView();
+            }
+        });
+        selectAllBtn.addEventListener('click', () => { currentlyDisplayedSongs.forEach(s => { const m = allFetchedSongs.find(ms => ms.id === s.id); if(m) m.selected = true; }); updateView(); });
+        selectNoneBtn.addEventListener('click', () => { allFetchedSongs.forEach(s => s.selected = false); updateView(); });
+        viewSelectedBtn.addEventListener('click', () => { showingSelectedOnly = !showingSelectedOnly; viewSelectedBtn.classList.toggle('active'); viewSelectedBtn.innerText = showingSelectedOnly ? "Showing Selected Only" : "Show Selected Only"; updateView(); });
+        tagsHelpBtn.addEventListener('click', () => tagsHelpPanel.classList.toggle('hidden'));
+        stopFetchBtn.addEventListener('click', () => { abortFetch = true; stopFetchBtn.disabled = true; stopFetchBtn.innerText = "Stopping..."; });
+        [searchInput, maxResultsInput].forEach(el => el.addEventListener('input', updateView));
+        sortDropdown.addEventListener('change', () => {
+            if (!sortDropdown.value) sortColumn = null;
+            else { const parts = sortDropdown.value.split('-'); sortColumn = parts[0]; sortAscending = (parts[1] === 'asc'); }
+            updateView();
         });
 
-       // ==========================================
-        // MANUAL GENRE FETCHING
+        function switchTab(tabId) {
+            currentTab = tabId;
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.toggle('active', btn.id === `tab-${tabId}` || (tabId === 'main' && btn.id === 'tab-main') || (tabId === 'rejected' && btn.id === 'tab-rejected') || (tabId === 'skipped' && btn.id === 'tab-skipped')));
+            searchInput.value = ''; updateView();
+        }
+        function closeCustomTab(tabId) { customTabs = customTabs.filter(t => t.id !== tabId); document.getElementById(`tab-${tabId}`)?.remove(); if (currentTab === tabId) switchTab('main'); }
+        tabMain.addEventListener('click', () => switchTab('main')); tabRejected.addEventListener('click', () => switchTab('rejected')); tabSkipped.addEventListener('click', () => switchTab('skipped'));
+
+        saveTabBtn.addEventListener('click', () => {
+            if (currentlyDisplayedSongs.length === 0) return alert("No songs currently displayed to save.");
+            const tabId = `custom-${++customTabCounter}`;
+            let tabName = searchInput.value.trim() || aiPromptInput.value.trim() || (showingSelectedOnly ? 'Selected Songs' : `Saved View ${customTabCounter}`);
+            if (currentTab !== 'main') tabName = `${customTabs.find(t => t.id === currentTab)?.name || currentTab} - ${tabName}`;
+            
+            const checked = currentlyDisplayedSongs.filter(s => s.selected);
+            const songsToSave = (checked.length > 0 ? checked : currentlyDisplayedSongs).map(s => ({ ...s, selected: false }));
+            allFetchedSongs.forEach(s => s.selected = false); showingSelectedOnly = false; viewSelectedBtn.classList.remove('active'); viewSelectedBtn.innerText = "Show Selected Only";
+            
+            customTabs.push({ id: tabId, name: tabName, songs: songsToSave, textQuery: searchInput.value.trim(), aiQuery: aiPromptInput.value.trim() || lastAiQuery });
+            const btn = document.createElement('button'); btn.className = 'tab-btn'; btn.id = `tab-${tabId}`; btn.innerHTML = `${tabName} <span style="font-size: 0.8em; color: #888;">(${songsToSave.length})</span> <span class="close-tab-btn" data-id="${tabId}">✖</span>`;
+            btn.addEventListener('click', (e) => { if (e.target.classList.contains('close-tab-btn')) { e.stopPropagation(); closeCustomTab(tabId); } else switchTab(tabId); });
+            tabsContainer.appendChild(btn); switchTab(tabId); setStatus(`Created new tab: ${tabName}`);
+        });
+
+        resetFilterBtn.addEventListener('click', () => {
+            searchInput.value = ''; aiPromptInput.value = ''; maxResultsInput.value = ''; sortDropdown.value = ''; sortColumn = null;
+            showingSelectedOnly = false; viewSelectedBtn.classList.remove('active'); viewSelectedBtn.innerText = "Show Selected Only";
+            updateView(); setStatus("Filters reset.");
+        });
+
+        // ==========================================
+        // 8. AI FILTER ENGINE
+        // ==========================================
+        aiFilterBtn.addEventListener('click', async () => {
+            const validation = getValidSelection(); if (!validation) return;
+            const query = aiPromptInput.value.trim(); if (!query) return alert("Please enter an AI prompt.");
+            const rawMax = parseInt(maxResultsInput.value.trim(), 10);
+            const maxResults = (isNaN(rawMax) || rawMax <= 0) ? null : rawMax; 
+            
+            lastAiQuery = query; lastMaxResults = maxResults; aiFilterBtn.disabled = true; aiFilterBtn.innerText = "Thinking...";
+            setStatus(`Sending ${validation.selectedSongs.length} selected songs to Gemini... Please wait.`); startTimer();
+
+            try {
+                aiFilteredSongs = []; rejectedSongs = []; skippedSongs = []; tabRejected.classList.add('hidden'); tabSkipped.classList.add('hidden');
+                let songsToProcess = validation.selectedSongs;
+                if (validation.selectedSongs.length > 2500) { songsToProcess = validation.selectedSongs.slice(0, 2500); skippedSongs = validation.selectedSongs.slice(2500); }
+
+                const fetchPromises = chunkArray(songsToProcess, 500).map(async (chunk, i) => {
+                    const prompt = `You are a music librarian. Filter based on: "${query}". ${maxResults ? `LIMIT: MAXIMUM of ${maxResults} IDs.` : ''}\nReturn a raw JSON array of ONLY the string IDs matching the vibe.\nSongs: ${JSON.stringify(chunk.map(s => ({id: s.id, name: s.name, artist: s.artist, genre: s.genre})))}`;
+                    try { const text = await fetchGeminiData(prompt, validation.geminiKey, i); return (text.match(/"([a-zA-Z0-9]+)"/g) || []).map(id => id.replace(/"/g, '')); } catch { return []; }
+                });
+
+                let matchingIds = (await Promise.all(fetchPromises)).flat();
+                if (maxResults && matchingIds.length > maxResults) matchingIds = matchingIds.slice(0, maxResults);
+
+                const newFiltered = songsToProcess.filter(s => matchingIds.includes(s.id));
+                rejectedSongs = songsToProcess.filter(s => !matchingIds.includes(s.id)); rejectedSongs.forEach(s => s.selected = false);
+
+                latestAiTabId = `custom-${++customTabCounter}`;
+                customTabs.push({ id: latestAiTabId, name: `[AI] ${query.substring(0, 25)}...`, songs: newFiltered, aiQuery: query });
+                const btn = document.createElement('button'); btn.className = 'tab-btn'; btn.id = `tab-${latestAiTabId}`; btn.innerHTML = `[AI] ${query.substring(0,25)}... <span style="font-size:0.8em;color:#888;" id="badge-${latestAiTabId}">(${newFiltered.length})</span> <span class="close-tab-btn" data-id="${latestAiTabId}">✖</span>`;
+                btn.addEventListener('click', (e) => { if (e.target.classList.contains('close-tab-btn')) { e.stopPropagation(); closeCustomTab(latestAiTabId); } else switchTab(latestAiTabId); });
+                tabsContainer.insertBefore(btn, tabRejected);
+                
+                updateActionTabsUI(); switchTab(latestAiTabId); 
+                setStatus(`Found ${newFiltered.length} matches.` + (skippedSongs.length ? ` ${skippedSongs.length} skipped.` : ''));
+            } catch (e) { setStatus(`AI Filter Failed - ${e.message}`, true); } 
+            finally { stopTimer(); updateApiStatus('gemini', 'idle'); aiFilterBtn.disabled = false; aiFilterBtn.innerText = "Filter with AI"; }
+        });
+
+        processSkippedBtn.addEventListener('click', async () => {
+            const geminiKey = localStorage.getItem(GEMINI_KEY_KEY) || geminiKeyInput.value.trim();
+            if (skippedSongs.length === 0 || !geminiKey) return;
+            const queryToUse = customTabs.find(t => t.id === latestAiTabId)?.aiQuery || lastAiQuery;
+            if (!queryToUse) return alert("No AI prompt found for this batch.");
+
+            processSkippedBtn.disabled = true; processSkippedBtn.innerText = "Processing..."; setStatus("Processing skipped batch..."); startTimer();
+
+            try {
+                let songsToProcess = skippedSongs, newSkipped = [];
+                if (skippedSongs.length > 2500) { songsToProcess = skippedSongs.slice(0, 2500); newSkipped = skippedSongs.slice(2500); }
+
+                const fetchPromises = chunkArray(songsToProcess, 500).map(async (chunk, i) => {
+                    const max = lastMaxResults ? (lastMaxResults - (customTabs.find(t=>t.id===latestAiTabId)?.songs.length||0)) : null;
+                    if (max !== null && max <= 0) return [];
+                    const prompt = `You are a music librarian. Filter based on: "${queryToUse}". ${max ? `LIMIT: MAXIMUM of ${max} IDs.` : ''}\nReturn a raw JSON array of ONLY the string IDs matching the vibe.\nSongs: ${JSON.stringify(chunk.map(s => ({id: s.id, name: s.name, artist: s.artist})))}`;
+                    try { const text = await fetchGeminiData(prompt, geminiKey, i); return (text.match(/"([a-zA-Z0-9]+)"/g) || []).map(id => id.replace(/"/g, '')); } catch { return []; }
+                });
+
+                let matchingIds = (await Promise.all(fetchPromises)).flat();
+                if (lastMaxResults) { const allowed = lastMaxResults - (customTabs.find(t=>t.id===latestAiTabId)?.songs.length||0); if (matchingIds.length > allowed) matchingIds = matchingIds.slice(0, allowed); }
+
+                const newFiltered = songsToProcess.filter(s => matchingIds.includes(s.id));
+                const newRejected = songsToProcess.filter(s => !matchingIds.includes(s.id)); newRejected.forEach(s => s.selected = false);
+
+                rejectedSongs = [...rejectedSongs, ...newRejected]; skippedSongs = newSkipped;
+                const aiTab = customTabs.find(t => t.id === latestAiTabId);
+                if (aiTab) { aiTab.songs.push(...newFiltered); document.getElementById(`badge-${latestAiTabId}`).innerText = `(${aiTab.songs.length})`; switchTab(latestAiTabId); }
+                updateActionTabsUI(); setStatus(`Appended ${newFiltered.length} matches! ${skippedSongs.length} remaining.`);
+            } catch (e) { setStatus(`Batch Failed - ${e.message}`, true); } 
+            finally { stopTimer(); updateApiStatus('gemini', 'idle'); processSkippedBtn.disabled = false; processSkippedBtn.innerText = "Process Remaining"; }
+        });
+
+        // ==========================================
+        // 9. DATA FETCHERS (GENRES & LANGUAGES)
         // ==========================================
         fetchGenresBtn.addEventListener('click', async () => {
-            const selectedSongs = allFetchedSongs.filter(s => s.selected);
+            const validation = getValidSelection(false); if (!validation) return;
+            toggleFetchUI(true); setStatus("Fetching genres from Spotify...");
             
-            if (selectedSongs.length === 0) {
-                alert("Please select at least one song to fetch genres for.");
-                return;
-            }
+            const uniqueIds = [...new Set(validation.selectedSongs.map(s => s.artistId).filter(id => id))];
+            let fetchCount = 0, currentDelay = 0;
 
-            // Reset the UI and Kill Switch
-            abortFetch = false;
-            fetchGenresBtn.disabled = true;
-            fetchGenresAiBtn.disabled = true;
-            fetchLangAiBtn.disabled = true;
-            fetchGenresBtn.classList.add('hidden');
-            fetchGenresAiBtn.classList.add('hidden');
-            fetchLangAiBtn.classList.add('hidden');
-            stopFetchBtn.classList.remove('hidden');
-            stopFetchBtn.disabled = false;
-            stopFetchBtn.innerText = "Stop Fetching";
-            
-            startTimer();
+            for (let i = 0; i < uniqueIds.length; i++) {
+                if (abortFetch) { setStatus(`Aborted. Fetched ${fetchCount} artists.`); break; }
+                const artistId = uniqueIds[i];
+                if (validation.selectedSongs.find(s => s.artistId === artistId)?.genre !== 'Loading...') continue;
 
-            // 1. Get unique artists ONLY for the songs the user checked
-            const uniqueArtistIds = [...new Set(selectedSongs.map(s => s.artistId).filter(id => id))];
-            
-            const apiBase = "https://api.spotify." + "com/v1/artists/";
-            let currentDelay = 0; 
-            let fetchCount = 0;
-
-            setStatus(`Fetching genres for ${uniqueArtistIds.length} artists...`);
-
-            for (let i = 0; i < uniqueArtistIds.length; i++) {
-                // === THE KILL SWITCH CHECK ===
-                if (abortFetch) {
-                    setStatus(`Fetch aborted by user. Successfully fetched ${fetchCount} artists before stopping.`);
-                    break; // Instantly exits the loop
-                }
-
-                const artistId = uniqueArtistIds[i];
-                
                 try {
-                    // Skip if we already successfully pulled this artist's genre previously
-                    const isAlreadyLoaded = selectedSongs.find(s => s.artistId === artistId)?.genre !== 'Loading...' && 
-                                            selectedSongs.find(s => s.artistId === artistId)?.genre !== 'Unknown';
-                    if (isAlreadyLoaded) continue;
-
                     updateApiStatus('spotify', 'active');
-                    const artistRes = await fetch(`${apiBase}${artistId}`, {
-                        headers: { 'Authorization': `Bearer ${accessToken}` }
-                    });
-                    
-                    if (artistRes.status === 429) {
-                        updateApiStatus('spotify', 'limited');
-                        const retryAfter = parseInt(artistRes.headers.get('Retry-After') || 3);
-                        console.warn(`Rate limit hit. Pausing for ${retryAfter} seconds.`);
-                        setStatus(`Rate limited by Spotify. Cooling down for ${retryAfter}s...`);
-                        
-                        // We use a small interval loop here instead of one big timeout, 
-                        // so the Stop button works even DURING a 10-second rate-limit cooldown!
-                        let cooldownTime = retryAfter * 10; // Check every 100ms
-                        while (cooldownTime > 0) {
-                            if (abortFetch) break;
-                            await new Promise(r => setTimeout(r, 100));
-                            cooldownTime--;
-                        }
-                        
-                        if (abortFetch) break; // Double check after cooldown
-
-                        currentDelay = 200; // Apply temporary caution brakes
-                        i--; // Retry this artist
-                        continue; 
+                    const res = await fetch(`https://api.spotify.com/v1/artists/${artistId}`, { headers: { 'Authorization': `Bearer ${accessToken}` } });
+                    if (res.status === 429) {
+                        updateApiStatus('spotify', 'limited'); const cooldown = parseInt(res.headers.get('Retry-After') || 3);
+                        setStatus(`Rate limited. Cooling down for ${cooldown}s...`);
+                        for(let c=cooldown*10; c>0 && !abortFetch; c--) await new Promise(r => setTimeout(r, 100));
+                        if(abortFetch) break; currentDelay = 200; i--; continue; 
                     }
-
-                    if (artistRes.ok) {
-                        const artistData = await artistRes.json();
-                        let genreText = 'Unknown';
-                        if (artistData && artistData.genres && artistData.genres.length > 0) {
-                            genreText = artistData.genres.slice(0, 2).join(', ');
-                        }
-                        
-                        // Update the master array
-                        allFetchedSongs.filter(s => s.artistId === artistId).forEach(s => s.genre = genreText);
-                        
-                        // Dynamically update the UI cells
-                        document.querySelectorAll(`.genre-cell-${artistId}`).forEach(cell => {
-                            cell.innerText = genreText;
-                        });
-
-                        fetchCount++;
-
-                        if (currentDelay > 0) {
-                            currentDelay -= 10; 
-                            if (currentDelay < 0) currentDelay = 0; 
-                        }
+                    if (res.ok) {
+                        const data = await res.json(); const gText = data.genres?.slice(0, 2).join(', ') || 'Unknown';
+                        allFetchedSongs.filter(s => s.artistId === artistId).forEach(s => s.genre = gText);
+                        document.querySelectorAll(`.genre-cell-${artistId}`).forEach(c => c.innerText = gText);
+                        fetchCount++; if(currentDelay > 0) currentDelay -= 10;
                     }
-                    
-                    if (i % 5 === 0 || i === uniqueArtistIds.length - 1) {
-                        setStatus(`Genre Fetch: Processed ${i + 1} of ${uniqueArtistIds.length} artists.`);
-                    }
-                    
-                    if (currentDelay > 0) {
-                        await new Promise(r => setTimeout(r, currentDelay)); 
-                    }
-                    
-                } catch (e) {
-                    console.warn("Failed to fetch genre for artist " + artistId, e);
-                }
+                    if (i % 5 === 0) setStatus(`Processed ${i + 1} of ${uniqueIds.length}`);
+                    if (currentDelay > 0) await new Promise(r => setTimeout(r, Math.max(0, currentDelay)));
+                } catch(e) {}
             }
-            
-            if (!abortFetch) {
-                setStatus(`Success! Fetched new genres for ${fetchCount} artists.`);
-            }
-            
-            // Save whatever we got to the cache, even if we aborted early!
-            localStorage.setItem(CACHE_KEY, JSON.stringify(allFetchedSongs));
-            
-            // Reset UI
-            stopTimer();
-            updateApiStatus('spotify', 'idle');
-            stopFetchBtn.classList.add('hidden');
-            fetchGenresBtn.classList.remove('hidden');
-            fetchGenresAiBtn.classList.remove('hidden');
-            fetchLangAiBtn.classList.remove('hidden');
-            fetchGenresBtn.disabled = false;
-            fetchGenresAiBtn.disabled = false;
-            fetchLangAiBtn.disabled = false;
+            if (!abortFetch) setStatus(`Success! Fetched ${fetchCount} genres via Spotify.`);
+            localStorage.setItem(CACHE_KEY, JSON.stringify(allFetchedSongs)); toggleFetchUI(false); updateApiStatus('spotify', 'idle');
         });
 
-        // ==========================================
-        // AI GENRE FETCHING (BATCH PROCESSING)
-        // ==========================================
         fetchGenresAiBtn.addEventListener('click', async () => {
-            const geminiKey = localStorage.getItem(GEMINI_KEY_KEY) || geminiKeyInput.value.trim();
-            if (!geminiKey) {
-                alert("Please enter a Gemini API Key to use AI Genre Fetching.");
-                return;
-            }
-
-            const selectedSongs = allFetchedSongs.filter(s => s.selected);
-            if (selectedSongs.length === 0) {
-                alert("Please select at least one song to fetch genres for.");
-                return;
-            }
-
-            abortFetch = false;
-            fetchGenresBtn.disabled = true;
-            fetchGenresAiBtn.disabled = true;
-            fetchLangAiBtn.disabled = true;
-            fetchGenresBtn.classList.add('hidden');
-            fetchGenresAiBtn.classList.add('hidden');
-            fetchLangAiBtn.classList.add('hidden');
-            stopFetchBtn.classList.remove('hidden');
-            stopFetchBtn.disabled = false;
-            stopFetchBtn.innerText = "Stop Fetching";
+            const validation = getValidSelection(true); if (!validation) return;
+            toggleFetchUI(true);
             
-            startTimer();
-
-            // Extract unique artists that don't already have genres (safely handling older cached data)
-            const artistsToProcess = [];
-            const processedIds = new Set();
-            
-            selectedSongs.forEach(s => {
-                if (s.artistId && !processedIds.has(s.artistId)) {
-                    const needsFetch = !s.genre || s.genre === 'Loading...' || s.genre === 'Unknown';
-                    if (needsFetch) artistsToProcess.push({ id: s.artistId, name: s.artist });
-                    processedIds.add(s.artistId);
+            const artistsToProcess = [], processed = new Set();
+            validation.selectedSongs.forEach(s => {
+                if (s.artistId && !processed.has(s.artistId) && (!s.genre || s.genre === 'Loading...' || s.genre === 'Unknown')) {
+                    artistsToProcess.push({ id: s.artistId, name: s.artist }); processed.add(s.artistId);
                 }
             });
+            if (artistsToProcess.length === 0) { setStatus("All selected have genres."); return toggleFetchUI(false); }
 
-            if (artistsToProcess.length === 0) {
-                setStatus("All selected artists already have genres loaded.");
-                stopTimer();
-                stopFetchBtn.classList.add('hidden');
-                fetchGenresBtn.classList.remove('hidden');
-                fetchGenresAiBtn.classList.remove('hidden');
-                fetchLangAiBtn.classList.remove('hidden');
-                fetchGenresBtn.disabled = false;
-                fetchGenresAiBtn.disabled = false;
-                fetchLangAiBtn.disabled = false;
-                return;
-            }
-
-            setStatus(`Fetching genres for ${artistsToProcess.length} artists using Gemini...`);
-
-            const CHUNK_SIZE = 200; 
+            setStatus(`Fetching genres for ${artistsToProcess.length} artists via AI...`);
             let fetchCount = 0;
 
-            // 1. Break the artists down into array chunks
-            const chunks = [];
-            for (let i = 0; i < artistsToProcess.length; i += CHUNK_SIZE) {
-                chunks.push(artistsToProcess.slice(i, i + CHUNK_SIZE));
-            }
-
             try {
-                // 2. Map every chunk to a fetch request that runs SIMULTANEOUSLY
-                const fetchPromises = chunks.map(async (chunk, index) => {
-                    if (abortFetch) return {}; 
-                    
+                const fetchPromises = chunkArray(artistsToProcess, 200).map(async (chunk, index) => {
+                    if (abortFetch) return {};
+                    const prompt = `Classify these artists into a broad genre (1-2 words). Return ONLY a JSON map of the exact "id" to the genre. No markdown.\nExample: {"123":"Pop"}\nArtists: ${JSON.stringify(chunk)}`;
                     try {
-                        // Slightly tweaked prompt to force it to use the exact "id" key
-                        const prompt = `You are a music genre expert. Classify the following musical artists into a broad genre (1-2 words max, e.g., "Rock", "Synth-pop", "Hip Hop").
-                        Return ONLY a valid JSON object mapping the exact "id" from the array below to their genre. Do not include markdown formatting.
-                        Example format: {"12345": "Pop Rock", "67890": "Classical"}
-                        Artists:
-                        ${JSON.stringify(chunk)}`;
-
-                        const requestOptions = {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                contents: [{ parts: [{ text: prompt }] }],
-                                generationConfig: { temperature: 0.1, responseMimeType: "application/json" } 
-                            })
-                        };
-
-                        updateApiStatus('gemini', 'active');
-                        let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiKey}`, requestOptions);
-
-                        if (response.status === 429) {
-                            updateApiStatus('gemini', 'limited');
-                            console.warn(`Chunk ${index + 1}: Rate limit hit. Falling back to 3.1 Flash-Lite...`);
-                            updateApiStatus('gemini', 'lite');
-                            response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`, requestOptions);
-                        }
-
-                        if (!response.ok) throw new Error(`Gemini API failed with status ${response.status}`);
-
-                        const data = await response.json();
-                        let resultText = data.candidates[0].content.parts[0].text;
-                        
-                        // Clean markdown blocks just in case the AI ignores the JSON rule
-                        resultText = resultText.replace(/```json/gi, '').replace(/```/g, '').trim();
-                        
-                        return JSON.parse(resultText); 
-                    } catch (chunkError) {
-                        console.warn(`Chunk ${index + 1} failed to parse or fetch:`, chunkError);
-                        return {}; // Return an empty map so the rest of the batch doesn't instantly crash!
-                    }
+                        const text = await fetchGeminiData(prompt, validation.geminiKey, index);
+                        return JSON.parse(text.replace(/```json/gi, '').replace(/```/g, '').trim());
+                    } catch { return {}; }
                 });
 
-                // 3. Fire them all at once and wait for the entire batch to finish
-                const resultsArray = await Promise.all(fetchPromises);
-                
-                // 4. Combine all the individual JSON dictionaries back into one master map
-                const masterGenreMap = Object.assign({}, ...resultsArray);
-
-                // 5. Apply everything to the UI in one clean sweep
+                const masterMap = Object.assign({}, ...(await Promise.all(fetchPromises)));
                 if (!abortFetch) {
-                    for (const [artistId, genre] of Object.entries(masterGenreMap)) {
-                        allFetchedSongs.filter(s => s.artistId === artistId).forEach(s => s.genre = genre);
-                        document.querySelectorAll(`.genre-cell-${artistId}`).forEach(cell => {
-                            cell.innerText = genre;
-                        });
-                        fetchCount++;
+                    for (const [id, genre] of Object.entries(masterMap)) {
+                        allFetchedSongs.filter(s => s.artistId === id).forEach(s => s.genre = genre);
+                        document.querySelectorAll(`.genre-cell-${id}`).forEach(c => c.innerText = genre); fetchCount++;
                     }
                 }
-
-            } catch (e) {
-                console.warn("Failed to fetch batch genres from Gemini", e);
-                setStatus("Error analyzing genres. Some chunks may have failed.", true);
-            } finally {
-                updateApiStatus('gemini', 'idle');
-            }
-
-            if (!abortFetch) setStatus(`Success! AI fetched new genres for ${fetchCount} artists.`);
+            } catch (e) { setStatus("Error processing chunk.", true); }
             
-            localStorage.setItem(CACHE_KEY, JSON.stringify(allFetchedSongs));
-            
-            stopTimer();
-            stopFetchBtn.classList.add('hidden');
-            fetchGenresBtn.classList.remove('hidden');
-            fetchGenresAiBtn.classList.remove('hidden');
-            fetchLangAiBtn.classList.remove('hidden');
-            fetchGenresBtn.disabled = false;
-            fetchGenresAiBtn.disabled = false;
-            fetchLangAiBtn.disabled = false;
+            if (!abortFetch) setStatus(`Success! Fetched ${fetchCount} genres via AI.`);
+            localStorage.setItem(CACHE_KEY, JSON.stringify(allFetchedSongs)); toggleFetchUI(false); updateApiStatus('gemini', 'idle');
         });
 
-        // ==========================================
-        // AI LANGUAGE FETCHING (BATCH PROCESSING)
-        // ==========================================
         fetchLangAiBtn.addEventListener('click', async () => {
-            const geminiKey = localStorage.getItem(GEMINI_KEY_KEY) || geminiKeyInput.value.trim();
-            if (!geminiKey) {
-                alert("Please enter a Gemini API Key to use AI Language Fetching.");
-                return;
-            }
-
-            const selectedSongs = allFetchedSongs.filter(s => s.selected);
-            if (selectedSongs.length === 0) {
-                alert("Please select at least one song to fetch languages for.");
-                return;
-            }
-
-            abortFetch = false;
-            fetchGenresBtn.disabled = true;
-            fetchGenresAiBtn.disabled = true;
-            fetchLangAiBtn.disabled = true;
-            fetchGenresBtn.classList.add('hidden');
-            fetchGenresAiBtn.classList.add('hidden');
-            fetchLangAiBtn.classList.add('hidden');
-            stopFetchBtn.classList.remove('hidden');
-            stopFetchBtn.disabled = false;
-            stopFetchBtn.innerText = "Stop Fetching";
+            const validation = getValidSelection(true); if (!validation) return;
+            toggleFetchUI(true);
             
-            startTimer();
+            const songsToProcess = validation.selectedSongs.filter(s => (!s.language || s.language === 'Loading...' || s.language === 'Unknown')).map(s => ({ id: s.id, name: s.name, artist: s.artist }));
+            if (songsToProcess.length === 0) { setStatus("All selected have languages."); return toggleFetchUI(false); }
 
-            // Extract unique songs that don't already have languages (safely handling older cached data)
-            const songsToProcess = [];
-            selectedSongs.forEach(s => {
-                const needsFetch = !s.language || s.language === 'Loading...' || s.language === 'Unknown';
-                if (needsFetch) songsToProcess.push({ id: s.id, name: s.name, artist: s.artist });
-            });
-
-            if (songsToProcess.length === 0) {
-                setStatus("All selected songs already have languages loaded.");
-                stopTimer();
-                stopFetchBtn.classList.add('hidden');
-                fetchGenresBtn.classList.remove('hidden');
-                fetchGenresAiBtn.classList.remove('hidden');
-                fetchLangAiBtn.classList.remove('hidden');
-                fetchGenresBtn.disabled = false;
-                fetchGenresAiBtn.disabled = false;
-                fetchLangAiBtn.disabled = false;
-                return;
-            }
-
-            setStatus(`Fetching languages for ${songsToProcess.length} songs using Gemini...`);
-
-            const CHUNK_SIZE = 200; 
+            setStatus(`Fetching languages for ${songsToProcess.length} songs via AI...`);
             let fetchCount = 0;
 
-            const chunks = [];
-            for (let i = 0; i < songsToProcess.length; i += CHUNK_SIZE) {
-                chunks.push(songsToProcess.slice(i, i + CHUNK_SIZE));
-            }
-
             try {
-                const fetchPromises = chunks.map(async (chunk, index) => {
-                    if (abortFetch) return {}; 
-                    
+                const fetchPromises = chunkArray(songsToProcess, 200).map(async (chunk, index) => {
+                    if (abortFetch) return {};
+                    const prompt = `Identify primary vocal language of these songs based on title/artist. Or "Instrumental". Return ONLY a JSON map of the exact "id" to language. No markdown.\nExample: {"123":"English"}\nSongs: ${JSON.stringify(chunk)}`;
                     try {
-                        // Slightly tweaked prompt to force it to use the exact "id" key
-                        const prompt = `You are a music language expert. Identify the primary vocal language of the following songs based on their title and artist. If it is purely instrumental, return "Instrumental".
-                        Return ONLY a valid JSON object mapping the exact "id" from the array below to its language (1-2 words max, e.g. "English", "Spanish", "Instrumental"). Do not include markdown formatting.
-                        Example format: {"12345": "English", "67890": "Korean"}
-                        Songs:
-                        ${JSON.stringify(chunk)}`;
-
-                        const requestOptions = {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                contents: [{ parts: [{ text: prompt }] }],
-                                generationConfig: { temperature: 0.1, responseMimeType: "application/json" } 
-                            })
-                        };
-
-                        updateApiStatus('gemini', 'active');
-                        let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiKey}`, requestOptions);
-
-                        if (response.status === 429) {
-                            updateApiStatus('gemini', 'limited');
-                            console.warn(`Chunk ${index + 1}: Rate limit hit. Falling back to 3.1 Flash-Lite...`);
-                            updateApiStatus('gemini', 'lite');
-                            response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`, requestOptions);
-                        }
-
-                        if (!response.ok) throw new Error(`Gemini API failed with status ${response.status}`);
-
-                        const data = await response.json();
-                        let resultText = data.candidates[0].content.parts[0].text;
-                        
-                        // Clean markdown blocks just in case the AI ignores the JSON rule
-                        resultText = resultText.replace(/```json/gi, '').replace(/```/g, '').trim();
-                        
-                        return JSON.parse(resultText); 
-                    } catch (chunkError) {
-                        console.warn(`Chunk ${index + 1} failed to parse or fetch:`, chunkError);
-                        return {}; // Return an empty map so the rest of the batch doesn't instantly crash!
-                    }
+                        const text = await fetchGeminiData(prompt, validation.geminiKey, index);
+                        return JSON.parse(text.replace(/```json/gi, '').replace(/```/g, '').trim());
+                    } catch { return {}; }
                 });
 
-                const resultsArray = await Promise.all(fetchPromises);
-                const masterLangMap = Object.assign({}, ...resultsArray);
-
+                const masterMap = Object.assign({}, ...(await Promise.all(fetchPromises)));
                 if (!abortFetch) {
-                    for (const [songId, lang] of Object.entries(masterLangMap)) {
-                        allFetchedSongs.filter(s => s.id === songId).forEach(s => s.language = lang);
-                        document.querySelectorAll(`.lang-cell-${songId}`).forEach(cell => {
-                            cell.innerText = lang;
-                        });
-                        fetchCount++;
+                    for (const [id, lang] of Object.entries(masterMap)) {
+                        allFetchedSongs.filter(s => s.id === id).forEach(s => s.language = lang);
+                        document.querySelectorAll(`.lang-cell-${id}`).forEach(c => c.innerText = lang); fetchCount++;
                     }
                 }
-
-            } catch (e) {
-                console.warn("Failed to fetch batch languages from Gemini", e);
-                setStatus("Error analyzing languages. Some chunks may have failed.", true);
-            } finally {
-                updateApiStatus('gemini', 'idle');
-            }
-
-            if (!abortFetch) setStatus(`Success! AI fetched languages for ${fetchCount} songs.`);
+            } catch (e) { setStatus("Error processing chunk.", true); }
             
-            localStorage.setItem(CACHE_KEY, JSON.stringify(allFetchedSongs));
-            
-            stopTimer();
-            stopFetchBtn.classList.add('hidden');
-            fetchGenresBtn.classList.remove('hidden');
-            fetchGenresAiBtn.classList.remove('hidden');
-            fetchLangAiBtn.classList.remove('hidden');
-            fetchGenresBtn.disabled = false;
-            fetchGenresAiBtn.disabled = false;
-            fetchLangAiBtn.disabled = false;
+            if (!abortFetch) setStatus(`Success! Fetched ${fetchCount} languages via AI.`);
+            localStorage.setItem(CACHE_KEY, JSON.stringify(allFetchedSongs)); toggleFetchUI(false); updateApiStatus('gemini', 'idle');
         });
 
         // ==========================================
-        // PLAYLIST CREATION LOGIC
+        // 10. PLAYLIST CREATION
         // ==========================================
         createPlaylistBtn.addEventListener('click', async () => {
-            const selectedSongs = allFetchedSongs.filter(s => s.selected);
+            const validation = getValidSelection(false); if (!validation) return;
+
+            let baseName = (currentTab.startsWith('custom-') ? customTabs.find(t=>t.id===currentTab)?.name : (currentTab === 'ai' ? 'AI Results' : currentTab === 'rejected' ? 'Filtered Out' : currentTab === 'skipped' ? 'Unprocessed' : 'Main Library')) || 'AI Filtered';
+            baseName = baseName.replace(/\[AI\]/gi, '').replace(/^[\s-]+|[\s-]+$/g, '').trim().replace(/\b\w+/g, txt => txt === txt.toUpperCase() && txt.length > 1 ? txt : txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
             
-            if (selectedSongs.length === 0) {
-                alert("Please select at least one song to create a playlist.");
-                return;
-            }
+            const playlistName = prompt("Enter a name:", `${baseName} [AI]`); if (!playlistName) return;
 
-            // 1. Determine the base name from the active tab
-            let baseTabName = "AI Filtered Playlist";
-            if (currentTab === 'main') baseTabName = "Main Library";
-            else if (currentTab === 'ai') baseTabName = "AI Results";
-            else if (currentTab === 'rejected') baseTabName = "Filtered Out";
-            else if (currentTab === 'skipped') baseTabName = "Unprocessed";
-            else if (currentTab.startsWith('custom-')) {
-                const tab = customTabs.find(t => t.id === currentTab);
-                if (tab) baseTabName = tab.name;
-            }
+            const t = currentTab.startsWith('custom-') ? customTabs.find(x=>x.id===currentTab) : null;
+            const txtF = t?.textQuery ?? searchInput.value.trim(), aiQ = t?.aiQuery ?? lastAiQuery;
+            const dynamicDesc = aiQ && txtF ? `AI: "${aiQ}" | Text: "${txtF}"` : aiQ ? `AI: "${aiQ}"` : txtF ? `Text filter: "${txtF}"` : "Created via Spotify AI Filter.";
 
-            // Clean the base name to prevent duplicate tags (Removes "[AI]" and trailing/leading hyphens)
-            baseTabName = baseTabName.replace(/\[AI\]/gi, '').replace(/^[\s-]+|[\s-]+$/g, '').trim();
-
-            // 2. Convert to Title Case (preserving existing fully-capitalized acronyms)
-            const titleCaseName = baseTabName.replace(/\b\w+/g, function(txt) {
-                if (txt === txt.toUpperCase() && txt.length > 1) return txt; // Preserves words like "AI" or "EDM"
-                return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
-            });
-
-            // 3. Append the [AI] tag and trigger the prompt
-            const defaultPlaylistName = `${titleCaseName} [AI]`;
-            const playlistName = prompt("Enter a name for your new playlist:", defaultPlaylistName);
-            if (!playlistName) return; // User hit cancel
-
-            // 4. Build dynamic description based on the active tab's remembered queries
-            let dynamicDesc = "Created via Spotify AI Filter App.";
-            let activeTextFilter = searchInput.value.trim();
-            let activeAiQuery = lastAiQuery;
-
-            // Override with the tab's specific remembered queries if on a custom tab
-            if (currentTab.startsWith('custom-')) {
-                const tab = customTabs.find(t => t.id === currentTab);
-                if (tab) {
-                    activeTextFilter = tab.textQuery || "";
-                    activeAiQuery = tab.aiQuery || "";
-                }
-            }
-            
-            if (activeAiQuery && activeTextFilter) {
-                dynamicDesc = `AI Prompt: "${activeAiQuery}" | Text filter applied: "${activeTextFilter}"`;
-            } else if (activeAiQuery) {
-                dynamicDesc = `AI Prompt: "${activeAiQuery}"`;
-            } else if (activeTextFilter) {
-                dynamicDesc = `Text filter applied: "${activeTextFilter}"`;
-            } else if (currentTab.startsWith('custom-')) {
-                dynamicDesc = `Generated from custom tab: ${baseTabName}`;
-            }
-
-            createPlaylistBtn.disabled = true;
-            createPlaylistBtn.innerText = "Creating...";
-            startTimer();
-            setStatus("Fetching user profile...");
+            createPlaylistBtn.disabled = true; createPlaylistBtn.innerText = "Creating..."; startTimer(); setStatus("Building playlist...");
 
             try {
-                // 1. Get the User's Spotify ID (Using REAL Spotify URL)
-                const meResponse = await fetch('https://api.spotify.com/v1/me', {
-                    headers: { 'Authorization': `Bearer ${accessToken}` }
-                });
+                const me = await spotifyApiFetch('https://api.spotify.com/v1/me');
+                const playlist = await spotifyApiFetch('https://api.spotify.com/v1/me/playlists', 'POST', { name: playlistName, description: dynamicDesc, public: false });
                 
-                if (!meResponse.ok) {
-                    throw new Error("Failed to fetch user profile. You may need to log out and log back in.");
-                }
-                
-                const meData = await meResponse.json();
-                const userId = meData.id;
+                const uris = validation.selectedSongs.map(s => `spotify:track:${s.id}`);
+                for (const chunk of chunkArray(uris, 100)) await spotifyApiFetch(`https://api.spotify.com/v1/playlists/$${playlist.id}/items`, 'POST', { uris: chunk });
 
-                setStatus(`Creating empty playlist "${playlistName}"...`);
+                setStatus(`Success! Playlist "${playlistName}" created.`);
+            } catch (e) { setStatus(`Playlist Error - ${e.message}`, true); } 
+            finally { stopTimer(); createPlaylistBtn.disabled = false; createPlaylistBtn.innerText = "Create Playlist"; }
+        });
 
-                // 2. Create an empty Playlist (Using REAL Spotify URL)
-                const createResponse = await fetch(`https://api.spotify.com/v1/me/playlists`, {
-                    method: 'POST',
-                    headers: { 
-                        'Authorization': `Bearer ${accessToken}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        name: playlistName,
-                        description: dynamicDesc,
-                        public: false 
-                    })
-                });
-                
-                if (!createResponse.ok) {
-                    const errData = await createResponse.json().catch(() => ({}));
-                    console.error("Spotify API Error:", errData);
-                    throw new Error(`Spotify rejected playlist creation: ${errData.error?.message}`);
-                }
-                
-                const playlistData = await createResponse.json();
-                const playlistId = playlistData.id;
-
-                setStatus(`Adding ${selectedSongs.length} songs to playlist...`);
-
-                // 3. Add Tracks to Playlist (Using REAL Spotify URL)
-                const trackUris = selectedSongs.map(song => `spotify:track:${song.id}`);
-                const CHUNK_SIZE = 100;
-                
-                for (let i = 0; i < trackUris.length; i += CHUNK_SIZE) {
-                    const chunk = trackUris.slice(i, i + CHUNK_SIZE);
-                    const addResponse = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/items`, {
-                        method: 'POST',
-                        headers: { 
-                            'Authorization': `Bearer ${accessToken}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({ uris: chunk })
-                    });
-                    
-                    if (!addResponse.ok) {
-                        const errData = await addResponse.json().catch(() => ({}));
-                        console.error("Spotify Add Tracks Error:", errData);
-                        throw new Error(`Failed to add tracks (Batch ${Math.floor(i/CHUNK_SIZE) + 1}).`);
-                    }
-                }
-
-                setStatus(`Success! Playlist "${playlistName}" is now in your Spotify account.`);
-                
-            } catch (error) {
-                console.error("Full caught error:", error);
-                setStatus(`Playlist Error - ${error.message}`, true);
-            } finally {
-                stopTimer();
-                createPlaylistBtn.disabled = false;
-                createPlaylistBtn.innerText = "Create Playlist";
-            }
+        clearCacheBtn.addEventListener('click', () => {
+            [CACHE_KEY, CLIENT_ID_KEY, GEMINI_KEY_KEY, TOKEN_KEY, TOKEN_EXPIRY_KEY].forEach(k => localStorage.removeItem(k));
+            accessToken = null; allFetchedSongs = []; aiFilteredSongs = []; skippedSongs = []; rejectedSongs = []; currentlyDisplayedSongs = []; customTabs = [];
+            document.querySelectorAll('.tab-btn').forEach(b => { if(!['tab-main','tab-rejected','tab-skipped'].includes(b.id)) b.remove(); });
+            switchTab('main'); [tabRejected, tabSkipped, table, searchContainer, selectionBar, tabsContainer, clearCacheBtn].forEach(e => e.classList.add('hidden'));
+            tbody.innerHTML = ''; searchInput.value = ''; aiPromptInput.value = ''; clientIdInput.value = ''; geminiKeyInput.value = '';
+            setupSection.classList.remove('hidden'); stopTimer(); setStatus("Cache cleared. Please log in again.");
         });
     </script>
 </body>
