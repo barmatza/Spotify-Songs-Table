@@ -128,13 +128,6 @@
             <div style="display: flex; gap: 10px;">
                 <input type="text" id="ai-prompt-input" placeholder="AI Prompt: Describe the vibe (e.g., 'Upbeat running music')..." style="flex-grow: 1; font-size: 16px; padding: 12px; border-color: #8A2BE2;">
                 <input type="number" id="max-results-input" placeholder="Max (0=All)" min="0" style="width: 130px; font-size: 15px; padding: 12px; border: 1px solid #333; border-radius: 4px;">
-                <select id="sort-dropdown" style="width: 150px; font-size: 15px; padding: 12px; border: 1px solid #333; border-radius: 4px; cursor: pointer;">
-                    <option value="">Sort: Default</option>
-                    <option value="name-asc">Title (A-Z)</option>
-                    <option value="name-desc">Title (Z-A)</option>
-                    <option value="artist-asc">Artist (A-Z)</option>
-                    <option value="artist-desc">Artist (Z-A)</option>
-                </select>
                 <button id="ai-filter-btn" class="ai-btn" style="min-width: 150px;">Filter with AI</button>
                 <button id="reset-filter-btn" style="background-color: #333;">Reset All</button>
             </div>
@@ -202,7 +195,7 @@
         const searchContainer = document.getElementById('search-container'), searchInput = document.getElementById('search-input');
         const tagsHelpBtn = document.getElementById('tags-help-btn'), tagsHelpPanel = document.getElementById('tags-help-panel'); 
         const aiPromptInput = document.getElementById('ai-prompt-input'), maxResultsInput = document.getElementById('max-results-input');
-        const sortDropdown = document.getElementById('sort-dropdown'), aiFilterBtn = document.getElementById('ai-filter-btn'), resetFilterBtn = document.getElementById('reset-filter-btn'), saveTabBtn = document.getElementById('save-tab-btn');
+        const aiFilterBtn = document.getElementById('ai-filter-btn'), resetFilterBtn = document.getElementById('reset-filter-btn'), saveTabBtn = document.getElementById('save-tab-btn');
         const selectionBar = document.getElementById('selection-bar'), selectAllBtn = document.getElementById('select-all-btn'), selectNoneBtn = document.getElementById('select-none-btn');
         const viewSelectedBtn = document.getElementById('view-selected-btn'), fetchGenresBtn = document.getElementById('fetch-genres-btn'), fetchGenresAiBtn = document.getElementById('fetch-genres-ai-btn'), fetchLangAiBtn = document.getElementById('fetch-lang-ai-btn'); 
         const stopFetchBtn = document.getElementById('stop-fetch-btn'), createPlaylistBtn = document.getElementById('create-playlist-btn'), selectionCountText = document.getElementById('selection-count');
@@ -497,7 +490,8 @@
         }
 
         async function fetchAllLikedSongs() {
-            let allSongs = [], nextUrl = getSpotifyUrl("/v1/me/tracks");
+            // Added ?limit=50 to fetch the absolute maximum allowed by Spotify per request
+            let allSongs = [], nextUrl = getSpotifyUrl("/v1/me/tracks?limit=50");
             try {
                 while (nextUrl) {
                     updateApiStatus('spotify', 'active');
@@ -533,11 +527,6 @@
         tagsHelpBtn.addEventListener('click', () => tagsHelpPanel.classList.toggle('hidden'));
         stopFetchBtn.addEventListener('click', () => { abortFetch = true; stopFetchBtn.disabled = true; stopFetchBtn.innerText = "Stopping..."; });
         [searchInput, maxResultsInput].forEach(el => el.addEventListener('input', updateView));
-        sortDropdown.addEventListener('change', () => {
-            if (!sortDropdown.value) sortColumn = null;
-            else { const parts = sortDropdown.value.split('-'); sortColumn = parts[0]; sortAscending = (parts[1] === 'asc'); }
-            updateView();
-        });
 
         function switchTab(tabId) {
             currentTab = tabId;
@@ -564,8 +553,12 @@
         });
 
         resetFilterBtn.addEventListener('click', () => {
-            searchInput.value = ''; aiPromptInput.value = ''; maxResultsInput.value = ''; sortDropdown.value = ''; sortColumn = null;
+            searchInput.value = ''; aiPromptInput.value = ''; maxResultsInput.value = ''; sortColumn = null;
             showingSelectedOnly = false; viewSelectedBtn.classList.remove('active'); viewSelectedBtn.innerText = "Show Selected Only";
+            
+            // Also explicitly remove the sorting arrows from the headers
+            table.querySelectorAll('th').forEach(t => t.classList.remove('sort-asc', 'sort-desc'));
+            
             updateView(); setStatus("Filters reset.");
         });
 
