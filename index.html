@@ -221,7 +221,7 @@
             </div>
         </div>
 
-        <<div id="tabs-container" class="tabs hidden">
+        <div id="tabs-container" class="tabs hidden">
             <button id="tab-main" class="tab-btn active">Main Library</button>
             <button id="tab-rejected" class="tab-btn hidden" style="color: #9e9e9e;">Filtered Out <span id="rejected-badge"></span></button>
             <button id="tab-skipped" class="tab-btn hidden" style="color: #ff9800;">Unprocessed <span id="skipped-badge"></span></button>
@@ -1384,6 +1384,20 @@
             const playlistName = prompt("Enter a name for your new playlist:", defaultPlaylistName);
             if (!playlistName) return; // User hit cancel
 
+            // 4. Build dynamic description based on active queries
+            let dynamicDesc = "Created via Spotify AI Filter App.";
+            const activeTextFilter = searchInput.value.trim();
+            
+            if (lastAiQuery && activeTextFilter) {
+                dynamicDesc = `AI Prompt: "${lastAiQuery}" | Text filter applied: "${activeTextFilter}"`;
+            } else if (lastAiQuery) {
+                dynamicDesc = `AI Prompt: "${lastAiQuery}"`;
+            } else if (activeTextFilter) {
+                dynamicDesc = `Text filter applied: "${activeTextFilter}"`;
+            } else if (currentTab.startsWith('custom-')) {
+                dynamicDesc = `Generated from custom tab: ${baseTabName}`;
+            }
+
             createPlaylistBtn.disabled = true;
             createPlaylistBtn.innerText = "Creating...";
             startTimer();
@@ -1413,7 +1427,7 @@
                     },
                     body: JSON.stringify({
                         name: playlistName,
-                        description: "Created via Spotify AI Filter App",
+                        description: dynamicDesc,
                         public: false 
                     })
                 });
