@@ -255,6 +255,7 @@
             
             <div style="display: flex; gap: 10px;">
                 <input type="text" id="ai-prompt-input" placeholder="AI Prompt: Describe the vibe (e.g., 'Upbeat running music')..." style="flex-grow: 1; font-size: 16px; padding: 12px; border-color: #8A2BE2;">
+                <input type="number" id="max-results-input" placeholder="Max Matches" min="1" style="width: 130px; font-size: 15px; padding: 12px; background-color: #282828; color: white; border: 1px solid #333; border-radius: 4px;">
                 <button id="ai-filter-btn" class="ai-btn" style="min-width: 150px;">Filter with AI</button>
                 <button id="reset-filter-btn" style="background-color: #333;">Reset All</button>
             </div>
@@ -305,8 +306,9 @@
         let skippedSongs = []; 
         let rejectedSongs = []; 
         let currentlyDisplayedSongs = []; 
-        let lastAiQuery = ""; // Remembers your AI prompt for batch processing
-        let latestAiTabId = null; // NEW: Tracks the current active AI tab for batch processing
+        let lastAiQuery = ""; 
+        let lastMaxResults = null; // NEW: Remembers your global limit for batching
+        let latestAiTabId = null; 
         let customTabs = [];
         let customTabCounter = 0;
         
@@ -335,8 +337,9 @@
         const searchContainer = document.getElementById('search-container');
         const searchInput = document.getElementById('search-input');
         const tagsHelpBtn = document.getElementById('tags-help-btn'); // NEW
-        const tagsHelpPanel = document.getElementById('tags-help-panel'); // NEW
+        const tagsHelpPanel = document.getElementById('tags-help-panel'); 
         const aiPromptInput = document.getElementById('ai-prompt-input'); 
+        const maxResultsInput = document.getElementById('max-results-input'); // NEW
         const aiFilterBtn = document.getElementById('ai-filter-btn');
         const resetFilterBtn = document.getElementById('reset-filter-btn');
         const saveTabBtn = document.getElementById('save-tab-btn');
@@ -866,7 +869,9 @@
         searchInput.addEventListener('input', updateView);
 
         aiFilterBtn.addEventListener('click', async () => {
-            const query = aiPromptInput.value.trim(); // Reads from the new AI box
+            const query = aiPromptInput.value.trim(); 
+            const rawMax = parseInt(maxResultsInput.value.trim(), 10);
+            const maxResults = isNaN(rawMax) ? null : rawMax;
             const geminiKey = localStorage.getItem(GEMINI_KEY_KEY) || geminiKeyInput.value.trim();
             const selectedSongs = allFetchedSongs.filter(s => s.selected);
 
@@ -883,7 +888,8 @@
                 return;
             }
 
-            lastAiQuery = query; // Save the query so the "Process Remaining" button uses the exact same prompt
+            lastAiQuery = query; 
+            lastMaxResults = maxResults;
             aiFilterBtn.disabled = true;
             aiFilterBtn.innerText = "Thinking...";
             setStatus(`Sending ${selectedSongs.length} selected songs to Gemini AI... Please wait.`);
@@ -922,7 +928,8 @@
                 const fetchPromises = chunks.map(async (chunk, index) => {
                     const prompt = `You are a music librarian API. I will provide a JSON array of songs in a user's library.
                     The user has requested to filter this library based on the following criteria: "${query}".
-                    Your task: Return a raw JSON array of ONLY the string IDs of the songs that match or fit the vibe of this criteria. 
+                    ${maxResults ? `CRITICAL LIMIT: You MUST return a MAXIMUM of ${maxResults} song IDs. Select only the absolute best matches.` : ''}
+                    Your task: Return a raw JSON array of ONLY the string IDs of the songs that match or fit the vibe of this criteria.
                     Do not include markdown blocks like \`\`\`json. Return ONLY the raw array [ "id1", "id2" ].
                     Song Library:
                     ${JSON.stringify(chunk)}`;
@@ -966,7 +973,12 @@
                 });
 
                 const resultsArray = await Promise.all(fetchPromises);
-                const allMatchingIds = resultsArray.flat();
+                let allMatchingIds = resultsArray.flat();
+
+                // Hard-enforce the limit just in case the AI ignores the prompt instruction
+                if (maxResults && allMatchingIds.length > maxResults) {
+                    allMatchingIds = allMatchingIds.slice(0, maxResults);
+                }
 
                 // 1. The songs the AI successfully matched
                 const filteredSongs = songsToProcess.filter(song => allMatchingIds.includes(song.id));
@@ -1092,9 +1104,18 @@
                 }
 
                 const fetchPromises = chunks.map(async (chunk, index) => {
+                    const fetchPromises = chunks.map(async (chunk, index) => {
+                    // Calculate if we need a strict subset for this batch based on previous results
+                    let currentBatchMax = lastMaxResults;
+                    if (lastMaxResults) {
+                        currentBatchMax = lastMaxResults - aiFilteredSongs.length;
+                        if (currentBatchMax <= 0) return []; // Safely abort fetch if we already hit the global limit
+                    }
+
                     const prompt = `You are a music librarian API. I will provide a JSON array of songs in a user's library.
                     The user has requested to filter this library based on the following criteria: "${queryToUse}".
-                    Your task: Return a raw JSON array of ONLY the string IDs of the songs that match or fit the vibe of this criteria. 
+                    ${currentBatchMax ? `CRITICAL LIMIT: You MUST return a MAXIMUM of ${currentBatchMax} song IDs.` : ''}
+                    Your task: Return a raw JSON array of ONLY the string IDs of the songs that match or fit the vibe of this criteria.
                     Do not include markdown blocks like \`\`\`json. Return ONLY the raw array [ "id1", "id2" ].
                     Song Library:
                     ${JSON.stringify(chunk)}`;
@@ -1132,7 +1153,15 @@
                 });
 
                 const resultsArray = await Promise.all(fetchPromises);
-                const allMatchingIds = resultsArray.flat();
+                let allMatchingIds = resultsArray.flat();
+
+                // Hard-enforce the limit for the current batch
+                if (lastMaxResults) {
+                    const remainingAllowed = lastMaxResults - aiFilteredSongs.length;
+                    if (allMatchingIds.length > remainingAllowed) {
+                        allMatchingIds = allMatchingIds.slice(0, remainingAllowed);
+                    }
+                }
 
                 const newFiltered = songsToProcess.filter(song => allMatchingIds.includes(song.id));
                 const newRejected = songsToProcess.filter(song => !allMatchingIds.includes(song.id));
@@ -1180,7 +1209,8 @@
 
         resetFilterBtn.addEventListener('click', () => {
             searchInput.value = '';
-            aiPromptInput.value = ''; // Clears the AI box
+            aiPromptInput.value = ''; 
+            maxResultsInput.value = ''; // Clears the limits
             showingSelectedOnly = false;
             viewSelectedBtn.classList.remove('active');
             viewSelectedBtn.innerText = "Show Selected Only";
