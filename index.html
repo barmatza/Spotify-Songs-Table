@@ -265,7 +265,8 @@
             <button id="select-all-btn" class="secondary-btn">Select All</button>
             <button id="select-none-btn" class="secondary-btn">Deselect All</button>
             <button id="view-selected-btn" class="toggle-btn">Show Selected Only</button>
-            <button id="fetch-genres-btn" class="secondary-btn" style="background-color: #8A2BE2; color: white; border: none; margin-left: 15px;">Fetch Selected Genres</button>
+            <button id="fetch-genres-btn" class="secondary-btn" style="background-color: #1DB954; color: white; border: none; margin-left: 15px;">Fetch Genres (Spotify)</button>
+            <button id="fetch-genres-ai-btn" class="secondary-btn" style="background-color: #8A2BE2; color: white; border: none; margin-left: 5px;">Fetch Genres (AI)</button>
             <button id="stop-fetch-btn" class="secondary-btn hidden" style="background-color: #ff4444; color: white; border: none; margin-left: 10px;">Stop Fetching</button>
             <button id="create-playlist-btn" class="secondary-btn" style="background-color: #1DB954; color: white; border: none; margin-left: auto;">Create Playlist</button>
             <span id="selection-count" style="margin-left: 10px;">0 songs selected</span>
@@ -351,7 +352,8 @@
 
         const viewSelectedBtn = document.getElementById('view-selected-btn');
         const fetchGenresBtn = document.getElementById('fetch-genres-btn'); 
-        const stopFetchBtn = document.getElementById('stop-fetch-btn'); // NEW
+        const fetchGenresAiBtn = document.getElementById('fetch-genres-ai-btn'); // NEW
+        const stopFetchBtn = document.getElementById('stop-fetch-btn'); 
         const createPlaylistBtn = document.getElementById('create-playlist-btn');
         const selectionCountText = document.getElementById('selection-count');
         
@@ -1352,7 +1354,9 @@
             // Reset the UI and Kill Switch
             abortFetch = false;
             fetchGenresBtn.disabled = true;
+            fetchGenresAiBtn.disabled = true;
             fetchGenresBtn.classList.add('hidden');
+            fetchGenresAiBtn.classList.add('hidden');
             stopFetchBtn.classList.remove('hidden');
             stopFetchBtn.disabled = false;
             stopFetchBtn.innerText = "Stop Fetching";
@@ -1458,7 +1462,136 @@
             updateApiStatus('spotify', 'idle');
             stopFetchBtn.classList.add('hidden');
             fetchGenresBtn.classList.remove('hidden');
+            fetchGenresAiBtn.classList.remove('hidden');
             fetchGenresBtn.disabled = false;
+            fetchGenresAiBtn.disabled = false;
+        });
+
+        // ==========================================
+        // AI GENRE FETCHING (BATCH PROCESSING)
+        // ==========================================
+        fetchGenresAiBtn.addEventListener('click', async () => {
+            const geminiKey = localStorage.getItem(GEMINI_KEY_KEY) || geminiKeyInput.value.trim();
+            if (!geminiKey) {
+                alert("Please enter a Gemini API Key to use AI Genre Fetching.");
+                return;
+            }
+
+            const selectedSongs = allFetchedSongs.filter(s => s.selected);
+            if (selectedSongs.length === 0) {
+                alert("Please select at least one song to fetch genres for.");
+                return;
+            }
+
+            abortFetch = false;
+            fetchGenresBtn.disabled = true;
+            fetchGenresAiBtn.disabled = true;
+            fetchGenresBtn.classList.add('hidden');
+            fetchGenresAiBtn.classList.add('hidden');
+            stopFetchBtn.classList.remove('hidden');
+            stopFetchBtn.disabled = false;
+            stopFetchBtn.innerText = "Stop Fetching";
+            
+            startTimer();
+
+            // Extract unique artists that don't already have genres
+            const artistsToProcess = [];
+            const processedIds = new Set();
+            
+            selectedSongs.forEach(s => {
+                if (s.artistId && !processedIds.has(s.artistId)) {
+                    const isAlreadyLoaded = s.genre !== 'Loading...' && s.genre !== 'Unknown';
+                    if (!isAlreadyLoaded) artistsToProcess.push({ id: s.artistId, name: s.artist });
+                    processedIds.add(s.artistId);
+                }
+            });
+
+            if (artistsToProcess.length === 0) {
+                setStatus("All selected artists already have genres loaded.");
+                stopTimer();
+                stopFetchBtn.classList.add('hidden');
+                fetchGenresBtn.classList.remove('hidden');
+                fetchGenresAiBtn.classList.remove('hidden');
+                fetchGenresBtn.disabled = false;
+                fetchGenresAiBtn.disabled = false;
+                return;
+            }
+
+            setStatus(`Fetching genres for ${artistsToProcess.length} artists using Gemini...`);
+
+            const CHUNK_SIZE = 50; // Gemini can classify 50 artists at once easily
+            let fetchCount = 0;
+
+            for (let i = 0; i < artistsToProcess.length; i += CHUNK_SIZE) {
+                if (abortFetch) {
+                    setStatus(`Fetch aborted by user. Successfully fetched ${fetchCount} artists.`);
+                    break;
+                }
+
+                const chunk = artistsToProcess.slice(i, i + CHUNK_SIZE);
+                
+                try {
+                    const prompt = `You are a music genre expert. Classify the following musical artists into a broad genre (1-2 words max, e.g., "Rock", "Synth-pop", "Hip Hop").
+                    Return ONLY a valid JSON object mapping the artist's ID to their genre. Do not include markdown formatting.
+                    Example format: {"artistId1": "Pop Rock", "artistId2": "Classical"}
+                    Artists:
+                    ${JSON.stringify(chunk)}`;
+
+                    const requestOptions = {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: prompt }] }],
+                            generationConfig: { temperature: 0.1, responseMimeType: "application/json" } 
+                        })
+                    };
+
+                    updateApiStatus('gemini', 'active');
+                    let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiKey}`, requestOptions);
+
+                    if (response.status === 429) {
+                        updateApiStatus('gemini', 'limited');
+                        console.warn(`Rate limit hit on Gemini. Falling back to 3.1 Flash-Lite...`);
+                        updateApiStatus('gemini', 'lite');
+                        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`, requestOptions);
+                    }
+
+                    if (!response.ok) throw new Error(`Gemini API failed with status ${response.status}`);
+
+                    const data = await response.json();
+                    const resultText = data.candidates[0].content.parts[0].text;
+                    const genreMap = JSON.parse(resultText);
+
+                    // Apply the batch of genres to the master list and UI instantly
+                    for (const [artistId, genre] of Object.entries(genreMap)) {
+                        allFetchedSongs.filter(s => s.artistId === artistId).forEach(s => s.genre = genre);
+                        document.querySelectorAll(`.genre-cell-${artistId}`).forEach(cell => {
+                            cell.innerText = genre;
+                        });
+                        fetchCount++;
+                    }
+
+                    setStatus(`AI Genre Fetch: Processed ${Math.min(i + CHUNK_SIZE, artistsToProcess.length)} of ${artistsToProcess.length} artists.`);
+
+                } catch (e) {
+                    console.warn("Failed to fetch genres from Gemini for chunk", e);
+                    setStatus("Error analyzing chunk. Retrying next...", true);
+                    await new Promise(r => setTimeout(r, 2000));
+                } finally {
+                    updateApiStatus('gemini', 'idle');
+                }
+            }
+
+            if (!abortFetch) setStatus(`Success! AI fetched new genres for ${fetchCount} artists.`);
+            
+            localStorage.setItem(CACHE_KEY, JSON.stringify(allFetchedSongs));
+            
+            stopTimer();
+            stopFetchBtn.classList.add('hidden');
+            fetchGenresBtn.classList.remove('hidden');
+            fetchGenresAiBtn.classList.remove('hidden');
+            fetchGenresBtn.disabled = false;
+            fetchGenresAiBtn.disabled = false;
         });
 
         // ==========================================
