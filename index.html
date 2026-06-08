@@ -480,6 +480,7 @@
 
         function startTimer() {
             timerBadge.classList.remove('hidden');
+            timerBadge.style.color = '#1ed760'; // Bright green while running
             timerBadge.innerText = '0.0s';
             startTime = Date.now();
             
@@ -491,7 +492,13 @@
 
         function stopTimer() {
             clearInterval(loadingInterval);
-            timerBadge.classList.add('hidden');
+            if (startTime) {
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                timerBadge.innerText = `Took ${elapsed}s`;
+                timerBadge.style.color = '#b3b3b3'; // Dim grey when finished
+            } else {
+                timerBadge.classList.add('hidden');
+            }
         }
 
         function setStatus(message, isError = false) {
@@ -1519,18 +1526,20 @@
 
             setStatus(`Fetching genres for ${artistsToProcess.length} artists using Gemini...`);
 
-            const CHUNK_SIZE = 200; // Increased to 200 for maximum speed while respecting output token limits
+            const CHUNK_SIZE = 200; 
             let fetchCount = 0;
 
+            // 1. Break the artists down into array chunks
+            const chunks = [];
             for (let i = 0; i < artistsToProcess.length; i += CHUNK_SIZE) {
-                if (abortFetch) {
-                    setStatus(`Fetch aborted by user. Successfully fetched ${fetchCount} artists.`);
-                    break;
-                }
+                chunks.push(artistsToProcess.slice(i, i + CHUNK_SIZE));
+            }
 
-                const chunk = artistsToProcess.slice(i, i + CHUNK_SIZE);
-                
-                try {
+            try {
+                // 2. Map every chunk to a fetch request that runs SIMULTANEOUSLY
+                const fetchPromises = chunks.map(async (chunk, index) => {
+                    if (abortFetch) return {}; 
+
                     const prompt = `You are a music genre expert. Classify the following musical artists into a broad genre (1-2 words max, e.g., "Rock", "Synth-pop", "Hip Hop").
                     Return ONLY a valid JSON object mapping the artist's ID to their genre. Do not include markdown formatting.
                     Example format: {"artistId1": "Pop Rock", "artistId2": "Classical"}
@@ -1551,7 +1560,7 @@
 
                     if (response.status === 429) {
                         updateApiStatus('gemini', 'limited');
-                        console.warn(`Rate limit hit on Gemini. Falling back to 3.1 Flash-Lite...`);
+                        console.warn(`Chunk ${index + 1}: Rate limit hit. Falling back to 3.1 Flash-Lite...`);
                         updateApiStatus('gemini', 'lite');
                         response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`, requestOptions);
                     }
@@ -1560,26 +1569,31 @@
 
                     const data = await response.json();
                     const resultText = data.candidates[0].content.parts[0].text;
-                    const genreMap = JSON.parse(resultText);
+                    return JSON.parse(resultText); 
+                });
 
-                    // Apply the batch of genres to the master list and UI instantly
-                    for (const [artistId, genre] of Object.entries(genreMap)) {
+                // 3. Fire them all at once and wait for the entire batch to finish
+                const resultsArray = await Promise.all(fetchPromises);
+                
+                // 4. Combine all the individual JSON dictionaries back into one master map
+                const masterGenreMap = Object.assign({}, ...resultsArray);
+
+                // 5. Apply everything to the UI in one clean sweep
+                if (!abortFetch) {
+                    for (const [artistId, genre] of Object.entries(masterGenreMap)) {
                         allFetchedSongs.filter(s => s.artistId === artistId).forEach(s => s.genre = genre);
                         document.querySelectorAll(`.genre-cell-${artistId}`).forEach(cell => {
                             cell.innerText = genre;
                         });
                         fetchCount++;
                     }
-
-                    setStatus(`AI Genre Fetch: Processed ${Math.min(i + CHUNK_SIZE, artistsToProcess.length)} of ${artistsToProcess.length} artists.`);
-
-                } catch (e) {
-                    console.warn("Failed to fetch genres from Gemini for chunk", e);
-                    setStatus("Error analyzing chunk. Retrying next...", true);
-                    await new Promise(r => setTimeout(r, 2000));
-                } finally {
-                    updateApiStatus('gemini', 'idle');
                 }
+
+            } catch (e) {
+                console.warn("Failed to fetch batch genres from Gemini", e);
+                setStatus("Error analyzing genres. Some chunks may have failed.", true);
+            } finally {
+                updateApiStatus('gemini', 'idle');
             }
 
             if (!abortFetch) setStatus(`Success! AI fetched new genres for ${fetchCount} artists.`);
