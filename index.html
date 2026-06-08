@@ -1519,7 +1519,7 @@
 
             setStatus(`Fetching genres for ${artistsToProcess.length} artists using Gemini...`);
 
-            const CHUNK_SIZE = 50; // Gemini can classify 50 artists at once easily
+            const CHUNK_SIZE = 200; // Increased to 200 for maximum speed while respecting output token limits
             let fetchCount = 0;
 
             for (let i = 0; i < artistsToProcess.length; i += CHUNK_SIZE) {
