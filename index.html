@@ -326,7 +326,8 @@
             
             const btn = document.createElement('button'); 
             btn.className = 'tab-btn'; btn.id = `tab-${tabId}`; 
-            btn.innerHTML = `${tabName} <span style="font-size: 0.8em; color: #888;">(${songs.length})</span> <span class="close-tab-btn" data-id="${tabId}">✖</span>`;
+            // Put the unique ID back into the badge span so the Process Remaining engine can find it
+            btn.innerHTML = `${tabName} <span style="font-size: 0.8em; color: #888;" id="badge-${tabId}">(${songs.length})</span> <span class="close-tab-btn" data-id="${tabId}">✖</span>`;
             btn.addEventListener('click', (e) => { 
                 if (e.target.classList.contains('close-tab-btn')) { e.stopPropagation(); closeCustomTab(tabId); } 
                 else switchTab(tabId); 
