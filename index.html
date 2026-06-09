@@ -189,7 +189,26 @@
         let lastAiQuery = "", lastMaxResults = null, latestAiTabId = null; 
         let sortColumn = null, sortAscending = true, customTabCounter = 0;
         let currentTab = 'main'; 
-        let showingSelectedOnly = false, abortFetch = false, forceFlashLite = false;
+        let showingSelectedOnly = false, abortFetch = false, forceFlashLite = false; 
+        let lastOperation = 'ai-filter';
+
+        function updateSkippedWarning(opType) {
+            lastOperation = opType;
+            const msgDiv = skippedWarning.querySelector('div');
+            if (opType === 'ai-filter') {
+                msgDiv.innerHTML = '<strong>Rate Limit Reached:</strong> Gemini maxes out at 2,500 songs per request. The songs below were temporarily skipped.';
+                processSkippedBtn.innerText = 'Process Remaining';
+            } else if (opType === 'spotify-genre') {
+                msgDiv.innerHTML = '<strong>Fetch Incomplete:</strong> Spotify rate-limited or failed to fetch genres for these artists.';
+                processSkippedBtn.innerText = 'Retry Spotify Fetch';
+            } else if (opType === 'ai-genre') {
+                msgDiv.innerHTML = '<strong>Fetch Incomplete:</strong> AI failed to classify some genres due to rate limits or errors.';
+                processSkippedBtn.innerText = 'Retry AI Genres';
+            } else if (opType === 'ai-lang') {
+                msgDiv.innerHTML = '<strong>Fetch Incomplete:</strong> AI failed to identify some languages due to rate limits or errors.';
+                processSkippedBtn.innerText = 'Retry AI Languages';
+            }
+        }
 
         // ==========================================
         // 2. DOM ELEMENTS
@@ -637,6 +656,7 @@
 
             try {
                 aiFilteredSongs = []; rejectedSongs = []; skippedSongs = []; updateActionTabsUI();
+                updateSkippedWarning('ai-filter');
                 let songsToProcess = validation.selectedSongs;
                 if (validation.selectedSongs.length > 2500) { songsToProcess = validation.selectedSongs.slice(0, 2500); skippedSongs = validation.selectedSongs.slice(2500); }
 
@@ -677,8 +697,22 @@ latestAiTabId = `custom-${++customTabCounter}`;
         });
 
         processSkippedBtn.addEventListener('click', async () => {
+            if (skippedSongs.length === 0) return;
+            
+            // If it's a data fetcher, auto-select the skipped songs and re-click the respective button!
+            if (lastOperation !== 'ai-filter') {
+                allFetchedSongs.forEach(s => s.selected = false);
+                skippedSongs.forEach(s => s.selected = true);
+                updateView();
+                
+                if (lastOperation === 'spotify-genre') fetchGenresBtn.click();
+                if (lastOperation === 'ai-genre') fetchGenresAiBtn.click();
+                if (lastOperation === 'ai-lang') fetchLangAiBtn.click();
+                return;
+            }
+
             const geminiKey = localStorage.getItem(GEMINI_KEY_KEY) || geminiKeyInput.value.trim();
-            if (skippedSongs.length === 0 || !geminiKey) return;
+            if (!geminiKey) return;
             const queryToUse = customTabs.find(t => t.id === latestAiTabId)?.aiQuery || lastAiQuery;
             if (!queryToUse) return alert("No AI prompt found for this batch.");
 
@@ -751,12 +785,14 @@ latestAiTabId = `custom-${++customTabCounter}`;
                 } catch(e) {}
             }
             
-            // Sweep any failed/aborted songs into the Unprocessed tab
+            // Sweep successes out of the skipped list, add new failures
+            skippedSongs = skippedSongs.filter(s => !(validation.selectedSongs.some(vs => vs.id === s.id) && s.genre !== 'Loading...'));
             const failedSongs = validation.selectedSongs.filter(s => s.genre === 'Loading...');
             if (failedSongs.length > 0) {
                 failedSongs.forEach(fs => { if (!skippedSongs.some(ss => ss.id === fs.id)) skippedSongs.push(fs); });
-                updateActionTabsUI();
+                updateSkippedWarning('spotify-genre');
             }
+            updateActionTabsUI();
 
             if (!abortFetch) setStatus(`Success! Fetched ${fetchCount} genres via Spotify.` + (failedSongs.length ? ` ${failedSongs.length} failed.` : ''));
             localStorage.setItem(CACHE_KEY, JSON.stringify(allFetchedSongs)); toggleFetchUI(false); updateApiStatus('spotify', 'idle');
@@ -800,12 +836,14 @@ latestAiTabId = `custom-${++customTabCounter}`;
                 }
             } catch (e) { setStatus("Error processing chunk.", true); }
             
-            // Sweep any failed/aborted songs into the Unprocessed tab
+            // Sweep successes out of the skipped list, add new failures
+            skippedSongs = skippedSongs.filter(s => !(validation.selectedSongs.some(vs => vs.id === s.id) && s.genre !== 'Loading...'));
             const failedSongs = validation.selectedSongs.filter(s => s.genre === 'Loading...');
             if (failedSongs.length > 0) {
                 failedSongs.forEach(fs => { if (!skippedSongs.some(ss => ss.id === fs.id)) skippedSongs.push(fs); });
-                updateActionTabsUI();
+                updateSkippedWarning('ai-genre');
             }
+            updateActionTabsUI();
 
             if (!abortFetch) setStatus(`Success! Fetched ${fetchCount} genres via AI.` + (failedSongs.length ? ` ${failedSongs.length} failed.` : ''));
             localStorage.setItem(CACHE_KEY, JSON.stringify(allFetchedSongs)); toggleFetchUI(false); updateApiStatus('gemini', 'idle');
@@ -844,12 +882,14 @@ latestAiTabId = `custom-${++customTabCounter}`;
                 }
             } catch (e) { setStatus("Error processing chunk.", true); }
             
-            // Sweep any failed/aborted songs into the Unprocessed tab
+            // Sweep successes out of the skipped list, add new failures
+            skippedSongs = skippedSongs.filter(s => !(validation.selectedSongs.some(vs => vs.id === s.id) && s.language !== 'Loading...'));
             const failedSongs = validation.selectedSongs.filter(s => s.language === 'Loading...');
             if (failedSongs.length > 0) {
                 failedSongs.forEach(fs => { if (!skippedSongs.some(ss => ss.id === fs.id)) skippedSongs.push(fs); });
-                updateActionTabsUI();
+                updateSkippedWarning('ai-lang');
             }
+            updateActionTabsUI();
 
             if (!abortFetch) setStatus(`Success! Fetched ${fetchCount} languages via AI.` + (failedSongs.length ? ` ${failedSongs.length} failed.` : ''));
             localStorage.setItem(CACHE_KEY, JSON.stringify(allFetchedSongs)); toggleFetchUI(false); updateApiStatus('gemini', 'idle');
