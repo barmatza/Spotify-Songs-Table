@@ -946,7 +946,10 @@
 
                 // 2. Offer to Overwrite if found
                 if (existingPlaylist) {
-                    const confirmOverwrite = confirm(`A playlist named "${existingPlaylist.name}" already exists with ${existingPlaylist.tracks.total} tracks.\n\nDo you want to OVERWRITE it?\n(Click OK to overwrite, or Cancel to create a duplicate)`);
+                    // Bulletproof the item count extraction against unpredictable Spotify API responses
+                    const itemCount = existingPlaylist.tracks?.total || existingPlaylist.items?.total || 0;
+                    
+                    const confirmOverwrite = confirm(`A playlist named "${existingPlaylist.name}" already exists with ${itemCount} items.\n\nDo you want to OVERWRITE it?\n(Click OK to overwrite, or Cancel to create a duplicate)`);
                     if (confirmOverwrite) {
                         targetPlaylistId = existingPlaylist.id;
                         isOverwrite = true;
