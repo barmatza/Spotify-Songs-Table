@@ -539,9 +539,16 @@
         saveTabBtn.addEventListener('click', () => {
             if (currentlyDisplayedSongs.length === 0) return alert("No songs currently displayed to save.");
             const tabId = `custom-${++customTabCounter}`;
-            let tabName = searchInput.value.trim() || aiPromptInput.value.trim() || (showingSelectedOnly ? 'Selected Songs' : `Saved View ${customTabCounter}`);
-            if (currentTab !== 'main') tabName = `${customTabs.find(t => t.id === currentTab)?.name || currentTab} - ${tabName}`;
+            let rawInput = searchInput.value.trim() || aiPromptInput.value.trim() || (showingSelectedOnly ? 'Selected Songs' : `Saved View ${customTabCounter}`);
+            let parentName = currentTab === 'rejected' ? 'Filtered Out' : currentTab === 'skipped' ? 'Unprocessed' : currentTab !== 'main' ? (customTabs.find(t => t.id === currentTab)?.name || currentTab) : '';
             
+            let tabName = parentName ? `${parentName} - ${rawInput}` : rawInput;
+            
+            // Clean up repeated [AI] tags: strip them all, then prepend ONE if it originally existed
+            const hasAi = tabName.includes('[AI]');
+            tabName = tabName.replace(/\[AI\]\s*/g, '').trim();
+            if (hasAi) tabName = `[AI] ${tabName}`;
+
             const checked = currentlyDisplayedSongs.filter(s => s.selected);
             const songsToSave = (checked.length > 0 ? checked : currentlyDisplayedSongs).map(s => ({ ...s, selected: false }));
             allFetchedSongs.forEach(s => s.selected = false); showingSelectedOnly = false; viewSelectedBtn.classList.remove('active'); viewSelectedBtn.innerText = "Show Selected Only";
@@ -592,13 +599,17 @@
                 const newFiltered = songsToProcess.filter(s => matchingIds.includes(s.id));
                 rejectedSongs = songsToProcess.filter(s => !matchingIds.includes(s.id)); rejectedSongs.forEach(s => s.selected = false);
 
-                latestAiTabId = `custom-${++customTabCounter}`;
+latestAiTabId = `custom-${++customTabCounter}`;
                 
-                let tabName = searchInput.value.trim() || aiPromptInput.value.trim() || (showingSelectedOnly ? 'Selected Songs' : `Saved View ${customTabCounter}`);//MINE
-                if (currentTab !== 'main') tabName = `${customTabs.find(t => t.id === currentTab)?.name || currentTab} - ${tabName}`;//MINE
+                let parentName = currentTab === 'rejected' ? 'Filtered Out' : currentTab === 'skipped' ? 'Unprocessed' : currentTab !== 'main' ? (customTabs.find(t => t.id === currentTab)?.name || currentTab) : '';
+                let tabName = parentName ? `${parentName} - ${query}` : query;
                 
-                customTabs.push({ id: latestAiTabId, name: `[AI] ${query}`, songs: newFiltered, aiQuery: query });
-                const btn = document.createElement('button'); btn.className = 'tab-btn'; btn.id = `tab-${latestAiTabId}`; btn.innerHTML = `[AI] ${tabName} <span style="font-size:0.8em;color:#888;" id="badge-${latestAiTabId}">(${newFiltered.length})</span> <span class="close-tab-btn" data-id="${latestAiTabId}">✖</span>`;
+                // Clean up repeated [AI] tags: strip them all, then force ONE at the very beginning
+                tabName = tabName.replace(/\[AI\]\s*/g, '').trim();
+                tabName = `[AI] ${tabName}`;
+                
+                customTabs.push({ id: latestAiTabId, name: tabName, songs: newFiltered, aiQuery: query });
+                const btn = document.createElement('button'); btn.className = 'tab-btn'; btn.id = `tab-${latestAiTabId}`; btn.innerHTML = `${tabName} <span style="font-size:0.8em;color:#888;" id="badge-${latestAiTabId}">(${newFiltered.length})</span> <span class="close-tab-btn" data-id="${latestAiTabId}">✖</span>`;
                 btn.addEventListener('click', (e) => { if (e.target.classList.contains('close-tab-btn')) { e.stopPropagation(); closeCustomTab(latestAiTabId); } else switchTab(latestAiTabId); });
                 tabsContainer.insertBefore(btn, tabRejected);
                 
