@@ -213,7 +213,6 @@
         // 1. CONFIGURATION & STATE
         // ==========================================
         const REDIRECT_URI = 'https://barmatza.github.io/Spotify-Songs-Table/'; 
-        // Added permissions to read the user's profile ID and scan their private playlists
         const SCOPES = 'user-library-read playlist-modify-public playlist-modify-private user-read-private playlist-read-private';
         
         const CACHE_KEY = 'spotify_liked_songs';
@@ -322,8 +321,6 @@
             return chunks;
         }
 
-        // --- NEW REFACTORED HELPERS ---
-
         function getLineageName(newSegment) {
             let parentName = currentTab === 'rejected' ? 'Filtered Out' : currentTab === 'skipped' ? 'Unprocessed' : currentTab !== 'main' ? (customTabs.find(t => t.id === currentTab)?.name || currentTab) : '';
             return parentName ? `${parentName} - ${newSegment}` : newSegment;
@@ -335,7 +332,6 @@
             
             const btn = document.createElement('button'); 
             btn.className = 'tab-btn'; btn.id = `tab-${tabId}`; 
-            // Put the unique ID back into the badge span so the Process Remaining engine can find it
             btn.innerHTML = `${tabName} <span style="font-size: 0.8em; color: #888;" id="badge-${tabId}">(${songs.length})</span> <span class="close-tab-btn" data-id="${tabId}">✖</span>`;
             btn.addEventListener('click', (e) => { 
                 if (e.target.classList.contains('close-tab-btn')) { e.stopPropagation(); closeCustomTab(tabId); } 
@@ -345,7 +341,7 @@
             tabsContainer.appendChild(btn);
             updateActionTabsUI(); 
             switchTab(tabId); 
-            setStatus(`Created new tab: ${tabName}`);
+            endStatus(`Created new tab: ${tabName}`);
             return tabId;
         }
 
@@ -359,13 +355,11 @@
             }
             updateActionTabsUI();
 
-            if (!abortFetch) setStatus(`${successMsg} ${fetchCount} items.` + (failedSongs.length ? ` ${failedSongs.length} failed.` : ''), false, opType);
+            if (!abortFetch) endStatus(`${successMsg} ${fetchCount} items.` + (failedSongs.length ? ` ${failedSongs.length} failed.` : ''), false, opType);
             localStorage.setItem(CACHE_KEY, JSON.stringify(allFetchedSongs)); 
             toggleFetchUI(false); 
             updateApiStatus(opType === 'spotify-genre' ? 'spotify' : 'gemini', 'idle');
         }
-
-        // ------------------------------
 
         function toggleFetchUI(isFetching) {
             abortFetch = false;
@@ -436,7 +430,7 @@
                     const logTag = batchIndex >= 0 ? `[Batch ${batchIndex + 1}/${totalBatches}]` : '[Request]';
                     const msg = `${logTag}: 3.5 Flash failed (${e.message}). Flipping switch to 3.1 Flash-Lite...`;
                     console.warn(msg);
-                    setStatus(msg, true, processId); 
+                    showStatus(msg, processId); 
                     forceFlashLite = true; 
                 }
             }
@@ -450,7 +444,7 @@
                     if (attempt === 1) {
                         const msg = `${logTag}: 3.1 Flash-Lite failed (${e.message}). Retrying in 2.5s...`;
                         console.warn(msg);
-                        setStatus(msg, true, processId); 
+                        showStatus(msg, processId); 
                         await new Promise(r => setTimeout(r, 2500));
                     } else {
                         throw new Error(`Gemini failed completely: ${e.message}`);
@@ -471,7 +465,6 @@
                 throw new Error(errData.error?.message || `Spotify API Error: ${response.status}`);
             }
             
-            // Gracefully handle empty responses (like PUT/DELETE success states)
             const text = await response.text();
             return text ? JSON.parse(text) : {};
         }
@@ -519,8 +512,9 @@
             if (startTime) { timerBadge.innerText = `Took ${((Date.now() - startTime) / 1000).toFixed(1)}s`; timerBadge.style.color = '#b3b3b3'; } 
             else { timerBadge.innerText = 'READY'; timerBadge.style.color = '#b3b3b3'; }
         }
-        // Upgraded Async Tracker Engine
-        function setStatus(msg, isError = false, processId = 'system') {
+
+        // 1. Show an ongoing process (stays locked on screen)
+        function showStatus(msg, processId = 'system') {
             let line = document.getElementById(`status-${processId}`);
             if (!line) {
                 line = document.createElement('div');
@@ -528,24 +522,32 @@
                 line.className = 'status-line';
                 statusContainer.appendChild(line);
             }
-
-            line.className = `status-line ${isError ? 'error' : ''}`;
-            line.innerHTML = `<span class="status-dot ${isError ? 'error-dot' : 'active-dot'}"></span> ${msg}`;
-
             if (line.timeoutId) clearTimeout(line.timeoutId);
             
-            // Auto-remove successes, failures, or generic system messages after 4s
-            const msgLower = msg.toLowerCase();
-            const isFinished = msgLower.includes('success') || msgLower.includes('failed') || msgLower.includes('aborted') || msgLower.includes('found') || msgLower.includes('appended') || msgLower.includes('reset');
-            
-            if (isFinished || isError || processId === 'system') {
-                line.timeoutId = setTimeout(() => {
-                    line.style.opacity = '0';
-                    setTimeout(() => line.remove(), 400); // Wait for fade transition
-                }, 4000);
-            } else {
-                line.style.opacity = '1'; // Keeps the line fully visible while actively tracking chunks
+            line.className = 'status-line';
+            line.innerHTML = `<span class="status-dot active-dot"></span> ${msg}`;
+            line.style.opacity = '1';
+        }
+
+        // 2. End a process (fades out after 4 seconds)
+        function endStatus(msg, isError = false, processId = 'system') {
+            let line = document.getElementById(`status-${processId}`);
+            if (!line) {
+                line = document.createElement('div');
+                line.id = `status-${processId}`;
+                statusContainer.appendChild(line);
             }
+            if (line.timeoutId) clearTimeout(line.timeoutId);
+
+            line.className = `status-line ${isError ? 'error' : ''}`;
+            const dotStyle = !isError ? 'style="background-color: #1ed760; box-shadow: 0 0 6px #1ed760;"' : '';
+            line.innerHTML = `<span class="status-dot ${isError ? 'error-dot' : ''}" ${dotStyle}></span> ${msg}`;
+            line.style.opacity = '1';
+
+            line.timeoutId = setTimeout(() => {
+                line.style.opacity = '0';
+                setTimeout(() => line.remove(), 400); 
+            }, 4000);
         }
 
         // ==========================================
@@ -644,7 +646,7 @@
 
         window.addEventListener('message', async (e) => {
             if (e.data?.type === 'spotify-auth-code') {
-                setStatus("Authenticating..."); startTimer();
+                showStatus("Authenticating...", "auth"); startTimer();
                 try {
                     const data = await fetch(getSpotifyUrl("/api/token", true), {
                         method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -654,8 +656,10 @@
                     accessToken = data.access_token;
                     localStorage.setItem(TOKEN_KEY, accessToken); localStorage.setItem(TOKEN_EXPIRY_KEY, Date.now() + (data.expires_in * 1000));
                     localStorage.removeItem('code_verifier'); setupSection.classList.add('hidden'); clearCacheBtn.classList.remove('hidden');
+                    
+                    endStatus("Authentication successful!", false, "auth");
                     initApp();
-                } catch { stopTimer(); setStatus("Auth failed. Check Client ID.", true); }
+                } catch { stopTimer(); endStatus("Auth failed. Check Client ID.", true, "auth"); }
             }
         });
 
@@ -671,7 +675,7 @@
 
             if (localStorage.getItem(CACHE_KEY)) {
                 setupSection.classList.add('hidden'); clearCacheBtn.classList.remove('hidden'); initApp();
-                if (!accessToken) setStatus("Your Spotify session expired. Reconnect to create playlists.", true);
+                if (!accessToken) endStatus("Your Spotify session expired. Reconnect to create playlists.", true);
             }
         });
 
@@ -680,15 +684,18 @@
             const cached = localStorage.getItem(CACHE_KEY);
             
             if (cached) {
-                stopTimer(); setStatus("Loaded from cache.");
+                stopTimer(); endStatus("Loaded from cache.");
                 allFetchedSongs = JSON.parse(cached).map(s => ({ ...s, selected: s.selected || false }));
                 renderTable(allFetchedSongs);
             } else if (accessToken) {
-                if (timerBadge.classList.contains('hidden')) startTimer();
-                setStatus("Fetching songs from Spotify...");
+                if (timerBadge.innerText === 'READY') startTimer();
+                showStatus("Fetching library from Spotify...", 'spotify-fetch');
                 allFetchedSongs = await fetchAllLikedSongs();
                 stopTimer();
-                if (allFetchedSongs.length > 0) localStorage.setItem(CACHE_KEY, JSON.stringify(allFetchedSongs));
+                if (allFetchedSongs.length > 0) {
+                    localStorage.setItem(CACHE_KEY, JSON.stringify(allFetchedSongs));
+                    endStatus(`Success! Fetched ${allFetchedSongs.length} songs.`, false, 'spotify-fetch');
+                }
             }
             if (allFetchedSongs.length > 0) [searchContainer, selectionBar, tabsContainer, apiMonitor].forEach(e => e.classList.remove('hidden'));
             updateView(); 
@@ -709,17 +716,15 @@
                         artistId: i.track.artists[0]?.id, album: i.track.album.name, image: i.track.album.images[2]?.url || '',
                         selected: false, genre: 'Loading...', language: 'Loading...'
                     })));
-                    nextUrl = data.next; setStatus(`Fetching... (${allSongs.length} retrieved)`);
+                    nextUrl = data.next; showStatus(`Fetching... (${allSongs.length} retrieved)`, 'spotify-fetch');
                 }
                 updateApiStatus('spotify', 'idle'); return allSongs;
-            } catch (e) { setStatus("Error fetching. Token may have expired.", true); return []; }
+            } catch (e) { endStatus("Error fetching. Token may have expired.", true, 'spotify-fetch'); return []; }
         }
 
         // ==========================================
         // 7. EVENTS & TABS LOGIC
         // ==========================================
-        
-        // Helper to sync selection state across all cloned arrays simultaneously
         function syncSelectionState(songId, isChecked) {
             [allFetchedSongs, rejectedSongs, skippedSongs, ...customTabs.map(t => t.songs)].forEach(list => {
                 const match = list.find(s => s.id === songId);
@@ -735,13 +740,11 @@
         });
 
         selectAllBtn.addEventListener('click', () => { 
-            // Selects all currently visible songs, updating them across all tabs
             currentlyDisplayedSongs.forEach(s => syncSelectionState(s.id, true)); 
             updateView(); 
         });
 
         selectNoneBtn.addEventListener('click', () => { 
-            // Forcibly scrubs the selected state from every single list in memory
             [allFetchedSongs, rejectedSongs, skippedSongs, ...customTabs.map(t => t.songs)].forEach(list => {
                 list.forEach(s => s.selected = false);
             });
@@ -750,7 +753,7 @@
 
         viewSelectedBtn.addEventListener('click', () => { showingSelectedOnly = !showingSelectedOnly; viewSelectedBtn.classList.toggle('active'); viewSelectedBtn.innerText = showingSelectedOnly ? "Showing Selected Only" : "Show Selected Only"; updateView(); });
         tagsHelpBtn.addEventListener('click', () => tagsHelpPanel.classList.toggle('hidden'));
-        stopFetchBtn.addEventListener('click', () => { abortFetch = true; stopFetchBtn.disabled = true; stopFetchBtn.innerText = "Stopping..."; });
+        stopFetchBtn.addEventListener('click', () => { abortFetch = true; stopFetchBtn.disabled = true; stopFetchBtn.innerText = "Stopping..."; endStatus("Operation aborted by user.", true, "system"); });
         [searchInput, maxResultsInput].forEach(el => el.addEventListener('input', updateView));
 
         function switchTab(tabId) {
@@ -769,7 +772,6 @@
             if (!rawInput && aiPromptInput.value.trim()) { rawInput = aiPromptInput.value.trim(); tag = "[AI]"; } 
             else if (!rawInput) { rawInput = showingSelectedOnly ? 'Selected' : `Saved View ${customTabCounter}`; }
 
-            // Refactored Helper 1
             let tabName = getLineageName(`${tag} ${rawInput}`);
             
             let parentList = currentTab === 'rejected' ? rejectedSongs : currentTab === 'skipped' ? skippedSongs : allFetchedSongs;
@@ -782,7 +784,6 @@
 
             allFetchedSongs.forEach(s => s.selected = false); showingSelectedOnly = false; viewSelectedBtn.classList.remove('active'); viewSelectedBtn.innerText = "Show Selected Only";
             
-            // Refactored Helper 2
             createAndSwitchToTab(tabName, songsToSave, searchInput.value.trim(), aiPromptInput.value.trim() || lastAiQuery);
         });
 
@@ -794,7 +795,7 @@
 
         resetFilterBtn.addEventListener('click', () => {
             resetFiltersUI();
-            updateView(); setStatus("Filters reset.");
+            updateView(); endStatus("Filters reset.");
         });
 
         // ==========================================
@@ -807,7 +808,7 @@
             const maxResults = (isNaN(rawMax) || rawMax <= 0) ? null : rawMax; 
             
             lastAiQuery = query; lastMaxResults = maxResults; aiFilterBtn.disabled = true; aiFilterBtn.innerText = "Thinking...";
-            setStatus(`Sending ${validation.selectedSongs.length} selected songs to Gemini... Please wait.`); startTimer();
+            showStatus(`Sending ${validation.selectedSongs.length} selected songs to Gemini... Please wait.`, 'ai-filter-main'); startTimer();
 
             try {
                 aiFilteredSongs = []; rejectedSongs = []; skippedSongs = []; updateActionTabsUI();
@@ -818,15 +819,15 @@
                 const chunks = chunkArray(songsToProcess, 500);
                 const fetchPromises = chunks.map(async (chunk, i) => {
                     const batchId = `ai-filter-${i}`;
-                    setStatus(`AI Filter: Processing batch ${i + 1} of ${chunks.length}...`, false, batchId);
+                    showStatus(`AI Filter: Processing batch ${i + 1} of ${chunks.length}...`, batchId);
                     
                     const prompt = `You are a music librarian. Filter based on: "${query}". ${maxResults ? `LIMIT: MAXIMUM of ${maxResults} IDs.` : ''}\nReturn a raw JSON array of ONLY the string IDs matching the vibe.\nSongs: ${JSON.stringify(chunk.map(s => ({id: s.id, name: s.name, artist: s.artist, genre: s.genre})))}`;
                     try { 
                         const text = await fetchGeminiData(prompt, validation.geminiKey, i, chunks.length, batchId); 
-                        setStatus(`AI Filter: Success! Batch ${i + 1} of ${chunks.length} completed.`, false, batchId);
+                        endStatus(`AI Filter: Success! Batch ${i + 1} of ${chunks.length} completed.`, false, batchId);
                         return (text.match(/"([a-zA-Z0-9]+)"/g) || []).map(id => id.replace(/"/g, '')); 
                     } catch { 
-                        setStatus(`AI Filter: Batch ${i + 1} failed.`, true, batchId);
+                        endStatus(`AI Filter: Batch ${i + 1} failed.`, true, batchId);
                         return []; 
                     }
                 });
@@ -837,12 +838,11 @@
                 const newFiltered = songsToProcess.filter(s => matchingIds.includes(s.id));
                 rejectedSongs = songsToProcess.filter(s => !matchingIds.includes(s.id)); rejectedSongs.forEach(s => s.selected = false);
                 
-                // Refactored Helpers 1 & 2
                 let tabName = getLineageName(`[AI] ${query}`);
                 latestAiTabId = createAndSwitchToTab(tabName, newFiltered, '', query);
                 
-                setStatus(`Found ${newFiltered.length} matches.` + (skippedSongs.length ? ` ${skippedSongs.length} skipped.` : ''), false, 'ai-filter');
-            } catch (e) { setStatus(`AI Filter Failed - ${e.message}`, true); } 
+                endStatus(`Found ${newFiltered.length} matches.` + (skippedSongs.length ? ` ${skippedSongs.length} skipped.` : ''), false, 'ai-filter-main');
+            } catch (e) { endStatus(`AI Filter Failed - ${e.message}`, true, 'ai-filter-main'); } 
             finally { stopTimer(); updateApiStatus('gemini', 'idle'); aiFilterBtn.disabled = false; aiFilterBtn.innerText = "Filter with AI"; }
         });
 
@@ -865,7 +865,7 @@
             const queryToUse = customTabs.find(t => t.id === latestAiTabId)?.aiQuery || lastAiQuery;
             if (!queryToUse) return alert("No AI prompt found for this batch.");
 
-            processSkippedBtn.disabled = true; processSkippedBtn.innerText = "Processing..."; setStatus("Processing skipped batch..."); startTimer();
+            processSkippedBtn.disabled = true; processSkippedBtn.innerText = "Processing..."; showStatus("Processing skipped batch...", 'ai-retry-main'); startTimer();
 
             try {
                 let songsToProcess = skippedSongs, newSkipped = [];
@@ -877,14 +877,14 @@
                     const max = lastMaxResults ? (lastMaxResults - (customTabs.find(t=>t.id===latestAiTabId)?.songs.length||0)) : null;
                     if (max !== null && max <= 0) return [];
                     
-                    setStatus(`Process Remaining: Processing batch ${i + 1} of ${chunks.length}...`, false, batchId);
+                    showStatus(`Process Remaining: Processing batch ${i + 1} of ${chunks.length}...`, batchId);
                     const prompt = `You are a music librarian. Filter based on: "${queryToUse}". ${max ? `LIMIT: MAXIMUM of ${max} IDs.` : ''}\nReturn a raw JSON array of ONLY the string IDs matching the vibe.\nSongs: ${JSON.stringify(chunk.map(s => ({id: s.id, name: s.name, artist: s.artist})))}`;
                     try { 
                         const text = await fetchGeminiData(prompt, geminiKey, i, chunks.length, batchId); 
-                        setStatus(`Process Remaining: Success! Batch ${i + 1} of ${chunks.length} completed.`, false, batchId);
+                        endStatus(`Process Remaining: Success! Batch ${i + 1} of ${chunks.length} completed.`, false, batchId);
                         return (text.match(/"([a-zA-Z0-9]+)"/g) || []).map(id => id.replace(/"/g, '')); 
                     } catch { 
-                        setStatus(`Process Remaining: Batch ${i + 1} failed.`, true, batchId);
+                        endStatus(`Process Remaining: Batch ${i + 1} failed.`, true, batchId);
                         return []; 
                     }
                 });
@@ -898,8 +898,8 @@
                 rejectedSongs = [...rejectedSongs, ...newRejected]; skippedSongs = newSkipped;
                 const aiTab = customTabs.find(t => t.id === latestAiTabId);
                 if (aiTab) { aiTab.songs.push(...newFiltered); document.getElementById(`badge-${latestAiTabId}`).innerText = `(${aiTab.songs.length})`; switchTab(latestAiTabId); }
-                updateActionTabsUI(); setStatus(`Appended ${newFiltered.length} matches! ${skippedSongs.length} remaining.`, false, 'ai-retry');
-            } catch (e) { setStatus(`Batch Failed - ${e.message}`, true); } 
+                updateActionTabsUI(); endStatus(`Appended ${newFiltered.length} matches! ${skippedSongs.length} remaining.`, false, 'ai-retry-main');
+            } catch (e) { endStatus(`Batch Failed - ${e.message}`, true, 'ai-retry-main'); } 
             finally { stopTimer(); updateApiStatus('gemini', 'idle'); processSkippedBtn.disabled = false; processSkippedBtn.innerText = "Process Remaining"; }
         });
 
@@ -908,13 +908,13 @@
         // ==========================================
         fetchGenresBtn.addEventListener('click', async () => {
             const validation = getValidSelection(false); if (!validation) return;
-            toggleFetchUI(true); setStatus("Fetching genres from Spotify...");
+            toggleFetchUI(true); showStatus("Fetching genres from Spotify...", 'spotify-genre');
             
             const uniqueIds = [...new Set(validation.selectedSongs.map(s => s.artistId).filter(id => id))];
             let fetchCount = 0, currentDelay = 0;
 
             for (let i = 0; i < uniqueIds.length; i++) {
-                if (abortFetch) { setStatus(`Aborted. Fetched ${fetchCount} artists.`); break; }
+                if (abortFetch) { endStatus(`Aborted. Fetched ${fetchCount} artists.`, false, 'spotify-genre'); break; }
                 const artistId = uniqueIds[i];
                 if (validation.selectedSongs.find(s => s.artistId === artistId)?.genre !== 'Loading...') continue;
 
@@ -923,7 +923,7 @@
                     const res = await fetch(getSpotifyUrl(`/v1/artists/${artistId}`), { headers: { 'Authorization': `Bearer ${accessToken}` } });
                     if (res.status === 429) {
                         updateApiStatus('spotify', 'limited'); const cooldown = parseInt(res.headers.get('Retry-After') || 3);
-                        setStatus(`Rate limited. Cooling down for ${cooldown}s...`);
+                        showStatus(`Rate limited. Cooling down for ${cooldown}s...`, 'spotify-genre');
                         for(let c=cooldown*10; c>0 && !abortFetch; c--) await new Promise(r => setTimeout(r, 100));
                         if(abortFetch) break; currentDelay = 200; i--; continue; 
                     }
@@ -933,12 +933,11 @@
                         document.querySelectorAll(`.genre-cell-${artistId}`).forEach(c => c.innerText = gText);
                         fetchCount++; if(currentDelay > 0) currentDelay -= 10;
                     }
-                    if (i % 5 === 0) setStatus(`Processed ${i + 1} of ${uniqueIds.length}`, false, 'spotify-genre');
+                    if (i % 5 === 0) showStatus(`Processed ${i + 1} of ${uniqueIds.length}`, 'spotify-genre');
                     if (currentDelay > 0) await new Promise(r => setTimeout(r, Math.max(0, currentDelay)));
                 } catch(e) {}
             }
             
-            // Refactored Helper 3
             sweepFailuresAndFinish(validation.selectedSongs, 'genre', 'spotify-genre', fetchCount, 'Success! Fetched genres via Spotify for');
         });
 
@@ -952,9 +951,9 @@
                     artistsToProcess.push({ id: s.artistId, name: s.artist }); processed.add(s.artistId);
                 }
             });
-            if (artistsToProcess.length === 0) { setStatus("All selected have genres."); return toggleFetchUI(false); }
+            if (artistsToProcess.length === 0) { endStatus("All selected have genres."); return toggleFetchUI(false); }
 
-            setStatus(`Fetching genres for ${artistsToProcess.length} artists via AI...`);
+            showStatus(`Fetching genres for ${artistsToProcess.length} artists via AI...`, 'ai-genre-main');
             let fetchCount = 0;
 
             try {
@@ -962,18 +961,18 @@
                 const fetchPromises = chunks.map(async (chunk, index) => {
                     if (abortFetch) return {};
                     const batchId = `ai-genre-${index}`;
-                    setStatus(`AI Genre: Processing batch ${index + 1} of ${chunks.length}...`, false, batchId);
+                    showStatus(`AI Genre: Processing batch ${index + 1} of ${chunks.length}...`, batchId);
                     
                     const prompt = `Classify these artists into a broad genre (1-2 words). Return ONLY a JSON map of the exact "id" to the genre. No markdown.\nExample: {"123":"Pop"}\nArtists: ${JSON.stringify(chunk)}`;
                     try {
                         const text = await fetchGeminiData(prompt, validation.geminiKey, index, chunks.length, batchId);
-                        setStatus(`AI Genre: Success! Batch ${index + 1} of ${chunks.length} completed.`, false, batchId);
+                        endStatus(`AI Genre: Success! Batch ${index + 1} of ${chunks.length} completed.`, false, batchId);
                         
                         const jsonMatch = text.match(/\{[\s\S]*\}/);
                         if (!jsonMatch) return {}; 
                         return JSON.parse(jsonMatch[0]);
                     } catch { 
-                        setStatus(`AI Genre: Batch ${index + 1} failed.`, true, batchId);
+                        endStatus(`AI Genre: Batch ${index + 1} failed.`, true, batchId);
                         return {}; 
                     }
                 });
@@ -985,10 +984,9 @@
                         document.querySelectorAll(`.genre-cell-${id}`).forEach(c => c.innerText = genre); fetchCount++;
                     }
                 }
-            } catch (e) { setStatus("Error processing chunk.", true); }
+            } catch (e) { endStatus("Error processing chunk.", true, 'ai-genre-main'); }
             
-            // Refactored Helper 3
-            sweepFailuresAndFinish(validation.selectedSongs, 'genre', 'ai-genre', fetchCount, 'Success! Fetched genres via AI for');
+            sweepFailuresAndFinish(validation.selectedSongs, 'genre', 'ai-genre-main', fetchCount, 'Success! Fetched genres via AI for');
         });
 
         fetchLangAiBtn.addEventListener('click', async () => {
@@ -996,9 +994,9 @@
             toggleFetchUI(true);
             
             const songsToProcess = validation.selectedSongs.filter(s => (!s.language || s.language === 'Loading...' || s.language === 'Unknown')).map(s => ({ id: s.id, name: s.name, artist: s.artist }));
-            if (songsToProcess.length === 0) { setStatus("All selected have languages."); return toggleFetchUI(false); }
+            if (songsToProcess.length === 0) { endStatus("All selected have languages."); return toggleFetchUI(false); }
 
-            setStatus(`Fetching languages for ${songsToProcess.length} songs via AI...`);
+            showStatus(`Fetching languages for ${songsToProcess.length} songs via AI...`, 'ai-lang-main');
             let fetchCount = 0;
 
             try {
@@ -1006,18 +1004,18 @@
                 const fetchPromises = chunks.map(async (chunk, index) => {
                     if (abortFetch) return {};
                     const batchId = `ai-lang-${index}`;
-                    setStatus(`AI Language: Processing batch ${index + 1} of ${chunks.length}...`, false, batchId);
+                    showStatus(`AI Language: Processing batch ${index + 1} of ${chunks.length}...`, batchId);
                     
                     const prompt = `Identify primary vocal language of these songs based on title/artist. Or "Instrumental". Return ONLY a JSON map of the exact "id" to language. No markdown.\nExample: {"123":"English"}\nSongs: ${JSON.stringify(chunk)}`;
                     try {
                         const text = await fetchGeminiData(prompt, validation.geminiKey, index, chunks.length, batchId);
-                        setStatus(`AI Language: Success! Batch ${index + 1} of ${chunks.length} completed.`, false, batchId);
+                        endStatus(`AI Language: Success! Batch ${index + 1} of ${chunks.length} completed.`, false, batchId);
                         
                         const jsonMatch = text.match(/\{[\s\S]*\}/);
                         if (!jsonMatch) return {}; 
                         return JSON.parse(jsonMatch[0]);
                     } catch { 
-                        setStatus(`AI Language: Batch ${index + 1} failed.`, true, batchId);
+                        endStatus(`AI Language: Batch ${index + 1} failed.`, true, batchId);
                         return {}; 
                     }
                 });
@@ -1029,10 +1027,9 @@
                         document.querySelectorAll(`.lang-cell-${id}`).forEach(c => c.innerText = lang); fetchCount++;
                     }
                 }
-            } catch (e) { setStatus("Error processing chunk.", true); }
+            } catch (e) { endStatus("Error processing chunk.", true, 'ai-lang-main'); }
             
-            // Refactored Helper 3
-            sweepFailuresAndFinish(validation.selectedSongs, 'language', 'ai-lang', fetchCount, 'Success! Fetched languages via AI for');
+            sweepFailuresAndFinish(validation.selectedSongs, 'language', 'ai-lang-main', fetchCount, 'Success! Fetched languages via AI for');
         });
 
         // ==========================================
@@ -1044,7 +1041,6 @@
             let baseName = (currentTab.startsWith('custom-') ? customTabs.find(t=>t.id===currentTab)?.name : (currentTab === 'ai' ? 'AI Results' : currentTab === 'rejected' ? 'Filtered Out' : currentTab === 'skipped' ? 'Unprocessed' : 'Main Library')) || 'AI Filtered';
             baseName = baseName.replace(/\[AI\]/gi, '').replace(/^[\s-]+|[\s-]+$/g, '').trim().replace(/\b\w+/g, txt => txt === txt.toUpperCase() && txt.length > 1 ? txt : txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
             
-            // Replaced native prompt with custom async modal
             const playlistName = await showCustomModal({
                 type: 'prompt',
                 title: 'Name Your Playlist',
@@ -1057,12 +1053,11 @@
             const txtF = t?.textQuery ?? searchInput.value.trim(), aiQ = t?.aiQuery ?? lastAiQuery;
             const dynamicDesc = aiQ && txtF ? `AI: "${aiQ}" | Text: "${txtF}"` : aiQ ? `AI: "${aiQ}"` : txtF ? `Text filter: "${txtF}"` : "Created via Spotify AI Filter.";
 
-            createPlaylistBtn.disabled = true; createPlaylistBtn.innerText = "Checking..."; startTimer(); setStatus("Checking existing playlists...");
+            createPlaylistBtn.disabled = true; createPlaylistBtn.innerText = "Checking..."; startTimer(); showStatus("Checking existing playlists...", 'playlist');
 
             try {
                 const me = await spotifyApiFetch(getSpotifyUrl('/v1/me'));
                 
-                // 1. Search user's library for an existing playlist with the exact same name
                 let existingPlaylist = null;
                 let nextUrl = getSpotifyUrl(`/v1/me/playlists?limit=50`);
                 while (nextUrl && !existingPlaylist) {
@@ -1074,11 +1069,9 @@
                 let targetPlaylistId = null;
                 let isOverwrite = false;
 
-                // 2. Offer to Overwrite if found
                 if (existingPlaylist) {
                     const itemCount = existingPlaylist.tracks?.total || existingPlaylist.items?.total || 0;
                     
-                    // Replaced native confirm with custom async modal
                     const confirmOverwrite = await showCustomModal({
                         type: 'confirm',
                         title: 'Overwrite Playlist?',
@@ -1093,9 +1086,8 @@
                     }
                 }
 
-                setStatus(isOverwrite ? "Overwriting playlist..." : "Building playlist...");
+                showStatus(isOverwrite ? "Overwriting playlist..." : "Building playlist...", 'playlist');
 
-                // 3. Update or Create the Playlist metadata
                 if (isOverwrite) {
                     await spotifyApiFetch(getSpotifyUrl(`/v1/playlists/${targetPlaylistId}`), 'PUT', { description: dynamicDesc });
                 } else {
@@ -1103,26 +1095,22 @@
                     targetPlaylistId = newPl.id;
                 }
                 
-                // 4. Populate Items
                 const uris = validation.selectedSongs.map(s => `spotify:track:${s.id}`);
                 const uriChunks = chunkArray(uris, 100);
 
                 if (isOverwrite && uriChunks.length > 0) {
-                    // A PUT request completely replaces all existing items with the first chunk
                     await spotifyApiFetch(getSpotifyUrl(`/v1/playlists/${targetPlaylistId}/items`), 'PUT', { uris: uriChunks[0] });
-                    // POST appends any remaining chunks
                     for (let i = 1; i < uriChunks.length; i++) {
                         await spotifyApiFetch(getSpotifyUrl(`/v1/playlists/${targetPlaylistId}/items`), 'POST', { uris: uriChunks[i] });
                     }
                 } else {
-                    // Creating new: Just POST all chunks sequentially
                     for (const chunk of uriChunks) {
                         await spotifyApiFetch(getSpotifyUrl(`/v1/playlists/${targetPlaylistId}/items`), 'POST', { uris: chunk });
                     }
                 }
 
-                setStatus(`Success! Playlist "${playlistName}" ${isOverwrite ? 'overwritten' : 'created'}.`);
-            } catch (e) { setStatus(`Playlist Error - ${e.message}`, true); } 
+                endStatus(`Success! Playlist "${playlistName}" ${isOverwrite ? 'overwritten' : 'created'}.`, false, 'playlist');
+            } catch (e) { endStatus(`Playlist Error - ${e.message}`, true, 'playlist'); } 
             finally { stopTimer(); createPlaylistBtn.disabled = false; createPlaylistBtn.innerText = "Create Playlist"; }
         });
 
@@ -1135,7 +1123,7 @@
             
             resetFiltersUI(); 
             
-            setupSection.classList.remove('hidden'); stopTimer(); setStatus("Cache cleared. Please log in again.");
+            setupSection.classList.remove('hidden'); stopTimer(); endStatus("Cache cleared. Please log in again.");
         });
     </script>
 </body>
