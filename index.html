@@ -539,15 +539,22 @@
         saveTabBtn.addEventListener('click', () => {
             if (currentlyDisplayedSongs.length === 0) return alert("No songs currently displayed to save.");
             const tabId = `custom-${++customTabCounter}`;
-            let rawInput = searchInput.value.trim() || aiPromptInput.value.trim() || (showingSelectedOnly ? 'Selected Songs' : `Saved View ${customTabCounter}`);
+            // Determine the tag and query for this specific save action
+            let rawInput = searchInput.value.trim();
+            let tag = "[TXT]";
+            
+            if (!rawInput && aiPromptInput.value.trim()) {
+                rawInput = aiPromptInput.value.trim();
+                tag = "[AI]"; // Catch edge case where they typed in the AI box but hit Save instead
+            } else if (!rawInput) {
+                rawInput = showingSelectedOnly ? 'Selected' : `Saved View ${customTabCounter}`;
+            }
+
+            let newSegment = `${tag} ${rawInput}`;
             let parentName = currentTab === 'rejected' ? 'Filtered Out' : currentTab === 'skipped' ? 'Unprocessed' : currentTab !== 'main' ? (customTabs.find(t => t.id === currentTab)?.name || currentTab) : '';
             
-            let tabName = parentName ? `${parentName} - ${rawInput}` : rawInput;
-            
-            // Clean up repeated [AI] tags: strip them all, then prepend ONE if it originally existed
-            const hasAi = tabName.includes('[AI]');
-            tabName = tabName.replace(/\[AI\]\s*/g, '').trim();
-            if (hasAi) tabName = `[AI] ${tabName}`;
+            // Chain the new segment to the parent's lineage
+            let tabName = parentName ? `${parentName} - ${newSegment}` : newSegment;
 
             const checked = currentlyDisplayedSongs.filter(s => s.selected);
             const songsToSave = (checked.length > 0 ? checked : currentlyDisplayedSongs).map(s => ({ ...s, selected: false }));
@@ -601,16 +608,14 @@
 
 latestAiTabId = `custom-${++customTabCounter}`;
                 
+                let newSegment = `[AI] ${query}`;
                 let parentName = currentTab === 'rejected' ? 'Filtered Out' : currentTab === 'skipped' ? 'Unprocessed' : currentTab !== 'main' ? (customTabs.find(t => t.id === currentTab)?.name || currentTab) : '';
-                let tabName = parentName ? `${parentName} - ${query}` : query;
                 
-                // Clean up repeated [AI] tags: strip them all, then force ONE at the very beginning
-                tabName = tabName.replace(/\[AI\]\s*/g, '').trim();
-                tabName = `[AI] ${tabName}`;
+                // Chain the new segment to the parent's lineage
+                let tabName = parentName ? `${parentName} - ${newSegment}` : newSegment;
                 
                 customTabs.push({ id: latestAiTabId, name: tabName, songs: newFiltered, aiQuery: query });
-                const btn = document.createElement('button'); btn.className = 'tab-btn'; btn.id = `tab-${latestAiTabId}`; btn.innerHTML = `${tabName} <span style="font-size:0.8em;color:#888;" id="badge-${latestAiTabId}">(${newFiltered.length})</span> <span class="close-tab-btn" data-id="${latestAiTabId}">✖</span>`;
-                btn.addEventListener('click', (e) => { if (e.target.classList.contains('close-tab-btn')) { e.stopPropagation(); closeCustomTab(latestAiTabId); } else switchTab(latestAiTabId); });
+                const btn = document.createElement('button'); btn.className = 'tab-btn'; btn.id = `tab-${latestAiTabId}`; btn.innerHTML = `${tabName} <span style="font-size:0.8em;color:#888;" id="badge-${latestAiTabId}">(${newFiltered.length})</span> <span class="close-tab-btn" data-id="${latestAiTabId}">✖</span>`;                btn.addEventListener('click', (e) => { if (e.target.classList.contains('close-tab-btn')) { e.stopPropagation(); closeCustomTab(latestAiTabId); } else switchTab(latestAiTabId); });
                 tabsContainer.insertBefore(btn, tabRejected);
                 
                 updateActionTabsUI(); switchTab(latestAiTabId); 
