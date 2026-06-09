@@ -750,7 +750,15 @@ latestAiTabId = `custom-${++customTabCounter}`;
                     if (currentDelay > 0) await new Promise(r => setTimeout(r, Math.max(0, currentDelay)));
                 } catch(e) {}
             }
-            if (!abortFetch) setStatus(`Success! Fetched ${fetchCount} genres via Spotify.`);
+            
+            // Sweep any failed/aborted songs into the Unprocessed tab
+            const failedSongs = validation.selectedSongs.filter(s => s.genre === 'Loading...');
+            if (failedSongs.length > 0) {
+                failedSongs.forEach(fs => { if (!skippedSongs.some(ss => ss.id === fs.id)) skippedSongs.push(fs); });
+                updateActionTabsUI();
+            }
+
+            if (!abortFetch) setStatus(`Success! Fetched ${fetchCount} genres via Spotify.` + (failedSongs.length ? ` ${failedSongs.length} failed.` : ''));
             localStorage.setItem(CACHE_KEY, JSON.stringify(allFetchedSongs)); toggleFetchUI(false); updateApiStatus('spotify', 'idle');
         });
 
@@ -792,7 +800,14 @@ latestAiTabId = `custom-${++customTabCounter}`;
                 }
             } catch (e) { setStatus("Error processing chunk.", true); }
             
-            if (!abortFetch) setStatus(`Success! Fetched ${fetchCount} genres via AI.`);
+            // Sweep any failed/aborted songs into the Unprocessed tab
+            const failedSongs = validation.selectedSongs.filter(s => s.genre === 'Loading...');
+            if (failedSongs.length > 0) {
+                failedSongs.forEach(fs => { if (!skippedSongs.some(ss => ss.id === fs.id)) skippedSongs.push(fs); });
+                updateActionTabsUI();
+            }
+
+            if (!abortFetch) setStatus(`Success! Fetched ${fetchCount} genres via AI.` + (failedSongs.length ? ` ${failedSongs.length} failed.` : ''));
             localStorage.setItem(CACHE_KEY, JSON.stringify(allFetchedSongs)); toggleFetchUI(false); updateApiStatus('gemini', 'idle');
         });
 
@@ -829,7 +844,14 @@ latestAiTabId = `custom-${++customTabCounter}`;
                 }
             } catch (e) { setStatus("Error processing chunk.", true); }
             
-            if (!abortFetch) setStatus(`Success! Fetched ${fetchCount} languages via AI.`);
+            // Sweep any failed/aborted songs into the Unprocessed tab
+            const failedSongs = validation.selectedSongs.filter(s => s.language === 'Loading...');
+            if (failedSongs.length > 0) {
+                failedSongs.forEach(fs => { if (!skippedSongs.some(ss => ss.id === fs.id)) skippedSongs.push(fs); });
+                updateActionTabsUI();
+            }
+
+            if (!abortFetch) setStatus(`Success! Fetched ${fetchCount} languages via AI.` + (failedSongs.length ? ` ${failedSongs.length} failed.` : ''));
             localStorage.setItem(CACHE_KEY, JSON.stringify(allFetchedSongs)); toggleFetchUI(false); updateApiStatus('gemini', 'idle');
         });
 
