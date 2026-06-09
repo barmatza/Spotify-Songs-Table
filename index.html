@@ -963,21 +963,21 @@
                     targetPlaylistId = newPl.id;
                 }
                 
-                // 4. Populate Tracks
+                // 4. Populate Items
                 const uris = validation.selectedSongs.map(s => `spotify:track:${s.id}`);
                 const uriChunks = chunkArray(uris, 100);
 
                 if (isOverwrite && uriChunks.length > 0) {
-                    // A PUT request completely replaces all existing tracks with the first chunk
-                    await spotifyApiFetch(getSpotifyUrl(`/v1/playlists/${targetPlaylistId}/tracks`), 'PUT', { uris: uriChunks[0] });
+                    // A PUT request completely replaces all existing items with the first chunk
+                    await spotifyApiFetch(getSpotifyUrl(`/v1/playlists/${targetPlaylistId}/items`), 'PUT', { uris: uriChunks[0] });
                     // POST appends any remaining chunks
                     for (let i = 1; i < uriChunks.length; i++) {
-                        await spotifyApiFetch(getSpotifyUrl(`/v1/playlists/${targetPlaylistId}/tracks`), 'POST', { uris: uriChunks[i] });
+                        await spotifyApiFetch(getSpotifyUrl(`/v1/playlists/${targetPlaylistId}/items`), 'POST', { uris: uriChunks[i] });
                     }
                 } else {
                     // Creating new: Just POST all chunks sequentially
                     for (const chunk of uriChunks) {
-                        await spotifyApiFetch(getSpotifyUrl(`/v1/playlists/${targetPlaylistId}/tracks`), 'POST', { uris: chunk });
+                        await spotifyApiFetch(getSpotifyUrl(`/v1/playlists/${targetPlaylistId}/items`), 'POST', { uris: chunk });
                     }
                 }
 
