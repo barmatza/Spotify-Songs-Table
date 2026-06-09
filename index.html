@@ -557,25 +557,31 @@
             const rawQuery = searchInput.value.trim().toLowerCase();
             if (rawQuery) {
                 const specificFilters = []; let generalSearch = rawQuery;
-                const filterRegex = /(\w+):(?:(["'])(.*?)\2|([^ ]+))/g; let match;
+                // Upgraded Regex to capture an optional "!" at the start (Group 1)
+                const filterRegex = /(!?)(\w+):(?:(["'])(.*?)\3|([^ ]+))/g; let match;
                 while ((match = filterRegex.exec(rawQuery)) !== null) {
-                    specificFilters.push({ key: match[1], value: match[3] || match[4] });
+                    specificFilters.push({ exclude: match[1] === '!', key: match[2].toLowerCase(), value: match[4] || match[5] });
                     generalSearch = generalSearch.replace(match[0], '');
                 }
                 generalSearch = generalSearch.trim();
 
                 baseList = baseList.filter(song => {
-                    for (const { key, value } of specificFilters) {
-                        if (key === 'artist' && !song.artist.toLowerCase().includes(value)) return false;
-                        if (key === 'album' && !song.album.toLowerCase().includes(value)) return false;
-                        if (key === 'title' && !song.name.toLowerCase().includes(value)) return false;
-                        if (key === 'genre' && !(song.genre && song.genre.toLowerCase().includes(value))) return false;
-                        if ((key === 'language' || key === 'lang') && !(song.language && song.language.toLowerCase().includes(value))) return false;
-                        if (key === 'number' || key === 'row') {
+                    for (const { exclude, key, value } of specificFilters) {
+                        let matchFound = false;
+                        if (key === 'artist') matchFound = song.artist.toLowerCase().includes(value);
+                        else if (key === 'album') matchFound = song.album.toLowerCase().includes(value);
+                        else if (key === 'title') matchFound = song.name.toLowerCase().includes(value);
+                        else if (key === 'genre') matchFound = (song.genre && song.genre.toLowerCase().includes(value));
+                        else if (key === 'language' || key === 'lang') matchFound = (song.language && song.language.toLowerCase().includes(value));
+                        else if (key === 'number' || key === 'row') {
                             const [min, max = min] = value.split('-').map(Number);
                             const pos = allFetchedSongs.findIndex(s => s.id === song.id) + 1;
-                            if (pos < min || pos > max) return false;
+                            matchFound = (pos >= min && pos <= max);
                         }
+                        
+                        // Fail the song if it matches an exclusion, or if it doesn't match a requirement
+                        if (exclude && matchFound) return false;
+                        if (!exclude && !matchFound) return false;
                     }
                     if (generalSearch) {
                         return song.name.toLowerCase().includes(generalSearch) || song.artist.toLowerCase().includes(generalSearch) || 
@@ -1071,6 +1077,12 @@
             } else {
                 baseName = currentTab === 'ai' ? 'AI Results' : currentTab === 'rejected' ? 'Filtered Out' : currentTab === 'skipped' ? 'Unprocessed' : 'Main Library';
             }
+            
+            // Smart Title Casing: Capitalizes words but protects [AI] and [TXT] tags
+            baseName = baseName.split(' ').map(word => {
+                if (word.match(/^\[?(AI|TXT)\]?$/i)) return word.toUpperCase();
+                return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+            }).join(' ');
             
             const playlistName = await showCustomModal({
                 type: 'prompt',
