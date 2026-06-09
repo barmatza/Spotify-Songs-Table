@@ -321,14 +321,10 @@
             return chunks;
         }
 
-        function getLineageName(newSegment) {
-            let parentName = currentTab === 'rejected' ? 'Filtered Out' : currentTab === 'skipped' ? 'Unprocessed' : currentTab !== 'main' ? (customTabs.find(t => t.id === currentTab)?.name || currentTab) : '';
-            return parentName ? `${parentName} - ${newSegment}` : newSegment;
-        }
-
-        function createAndSwitchToTab(tabName, songs, textQuery, aiQuery) {
+        function createAndSwitchToTab(tabName, songs, textQuery, aiQuery, breadcrumbs = []) {
             const tabId = `custom-${++customTabCounter}`;
-            customTabs.push({ id: tabId, name: tabName, songs: songs, textQuery: textQuery, aiQuery: aiQuery });
+            // Store the full history of queries in the tab's data
+            customTabs.push({ id: tabId, name: tabName, songs: songs, textQuery: textQuery, aiQuery: aiQuery, breadcrumbs: breadcrumbs });
             
             const btn = document.createElement('button'); 
             btn.className = 'tab-btn'; btn.id = `tab-${tabId}`; 
@@ -767,12 +763,21 @@
         saveTabBtn.addEventListener('click', () => {
             if (currentlyDisplayedSongs.length === 0) return alert("No songs currently displayed to save.");
             
-            let rawInput = searchInput.value.trim();
-            let tag = "[TXT]";
-            if (!rawInput && aiPromptInput.value.trim()) { rawInput = aiPromptInput.value.trim(); tag = "[AI]"; } 
-            else if (!rawInput) { rawInput = showingSelectedOnly ? 'Selected' : `Saved View ${customTabCounter}`; }
+            // Extract parent breadcrumbs if we are filtering an existing custom tab
+            let parentBreadcrumbs = [];
+            if (currentTab.startsWith('custom-')) {
+                const pTab = customTabs.find(t => t.id === currentTab);
+                if (pTab && pTab.breadcrumbs) parentBreadcrumbs = [...pTab.breadcrumbs];
+            }
 
-            let tabName = getLineageName(`${tag} ${rawInput}`);
+            let rawInput = searchInput.value.trim();
+            let tag = "TXT";
+            if (!rawInput && aiPromptInput.value.trim()) { rawInput = aiPromptInput.value.trim(); tag = "AI"; } 
+            else if (!rawInput) { rawInput = showingSelectedOnly ? 'Selected' : `Saved View ${customTabCounter + 1}`; }
+
+            // Append the new query and build the exact formatted name
+            const newBreadcrumbs = [...parentBreadcrumbs, { text: rawInput, type: tag }];
+            const tabName = newBreadcrumbs.map(b => `${b.text} [${b.type}]`).join(' - ');
             
             let parentList = currentTab === 'rejected' ? rejectedSongs : currentTab === 'skipped' ? skippedSongs : allFetchedSongs;
             if (currentTab.startsWith('custom-')) parentList = customTabs.find(t => t.id === currentTab)?.songs || parentList;
@@ -784,7 +789,7 @@
 
             allFetchedSongs.forEach(s => s.selected = false); showingSelectedOnly = false; viewSelectedBtn.classList.remove('active'); viewSelectedBtn.innerText = "Show Selected Only";
             
-            createAndSwitchToTab(tabName, songsToSave, searchInput.value.trim(), aiPromptInput.value.trim() || lastAiQuery);
+            createAndSwitchToTab(tabName, songsToSave, searchInput.value.trim(), aiPromptInput.value.trim() || lastAiQuery, newBreadcrumbs);
         });
 
         function resetFiltersUI() {
@@ -838,8 +843,16 @@
                 const newFiltered = songsToProcess.filter(s => matchingIds.includes(s.id));
                 rejectedSongs = songsToProcess.filter(s => !matchingIds.includes(s.id)); rejectedSongs.forEach(s => s.selected = false);
                 
-                let tabName = getLineageName(`[AI] ${query}`);
-                latestAiTabId = createAndSwitchToTab(tabName, newFiltered, '', query);
+                // Extract parent breadcrumbs and append the AI query
+                let parentBreadcrumbs = [];
+                if (currentTab.startsWith('custom-')) {
+                    const pTab = customTabs.find(t => t.id === currentTab);
+                    if (pTab && pTab.breadcrumbs) parentBreadcrumbs = [...pTab.breadcrumbs];
+                }
+                const newBreadcrumbs = [...parentBreadcrumbs, { text: query, type: 'AI' }];
+                const tabName = newBreadcrumbs.map(b => `${b.text} [${b.type}]`).join(' - ');
+                
+                latestAiTabId = createAndSwitchToTab(tabName, newFiltered, '', query, newBreadcrumbs);
                 
                 endStatus(`Found ${newFiltered.length} matches.` + (skippedSongs.length ? ` ${skippedSongs.length} skipped.` : ''), false, 'ai-filter-main');
             } catch (e) { endStatus(`AI Filter Failed - ${e.message}`, true, 'ai-filter-main'); } 
@@ -1042,20 +1055,29 @@
         createPlaylistBtn.addEventListener('click', async () => {
             const validation = getValidSelection(false); if (!validation) return;
 
-            let baseName = (currentTab.startsWith('custom-') ? customTabs.find(t=>t.id===currentTab)?.name : (currentTab === 'ai' ? 'AI Results' : currentTab === 'rejected' ? 'Filtered Out' : currentTab === 'skipped' ? 'Unprocessed' : 'Main Library')) || 'AI Filtered';
-            baseName = baseName.replace(/\[AI\]/gi, '').replace(/^[\s-]+|[\s-]+$/g, '').trim().replace(/\b\w+/g, txt => txt === txt.toUpperCase() && txt.length > 1 ? txt : txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
+            let baseName = 'AI Filtered';
+            let dynamicDesc = "Created via Spotify AI Filter.";
+            
+            // Generate Name and multi-line Description from the breadcrumb history
+            if (currentTab.startsWith('custom-')) {
+                const t = customTabs.find(x => x.id === currentTab);
+                if (t) {
+                    baseName = t.name; // This is already perfectly formatted from the breadcrumbs!
+                    if (t.breadcrumbs && t.breadcrumbs.length > 0) {
+                        dynamicDesc = t.breadcrumbs.map(b => `[${b.type}] ${b.text}`).join('\n');
+                    }
+                }
+            } else {
+                baseName = currentTab === 'ai' ? 'AI Results' : currentTab === 'rejected' ? 'Filtered Out' : currentTab === 'skipped' ? 'Unprocessed' : 'Main Library';
+            }
             
             const playlistName = await showCustomModal({
                 type: 'prompt',
                 title: 'Name Your Playlist',
-                defaultValue: `${baseName} [AI]`,
+                defaultValue: baseName,
                 confirmText: 'Continue'
             });
             if (!playlistName) return;
-
-            const t = currentTab.startsWith('custom-') ? customTabs.find(x=>x.id===currentTab) : null;
-            const txtF = t?.textQuery ?? searchInput.value.trim(), aiQ = t?.aiQuery ?? lastAiQuery;
-            const dynamicDesc = aiQ && txtF ? `AI: "${aiQ}" | Text: "${txtF}"` : aiQ ? `AI: "${aiQ}"` : txtF ? `Text filter: "${txtF}"` : "Created via Spotify AI Filter.";
 
             createPlaylistBtn.disabled = true; createPlaylistBtn.innerText = "Checking..."; startTimer(); showStatus("Checking existing playlists...", 'playlist');
 
