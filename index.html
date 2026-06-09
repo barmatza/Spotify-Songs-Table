@@ -270,14 +270,23 @@
 
             // Loop allows us to retry failed transient requests (503, 500, 502)
             for (let attempt = 0; attempt <= maxRetries; attempt++) {
-                updateApiStatus('gemini', 'active');
-                let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${geminiKey}`, requestOptions);
+                const isLastAttempt = (attempt === maxRetries);
+                const model = isLastAttempt ? 'gemini-3.1-flash-lite' : 'gemini-3.5-flash';
+                const logTag = chunkIndex >= 0 ? `Chunk ${chunkIndex + 1}` : 'Request';
 
-                // 1. Handle Rate Limits (429) by switching to the lighter model
-                if (response.status === 429) {
+                if (isLastAttempt) {
+                    console.warn(`${logTag}: Final retry. Forcing fallback to 3.1 Flash-Lite...`);
+                    updateApiStatus('gemini', 'lite');
+                } else {
+                    updateApiStatus('gemini', 'active');
+                }
+                
+                let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`, requestOptions);
+
+                // 1. Handle Rate Limits (429) by switching to the lighter model (if not already using it)
+                if (response.status === 429 && !isLastAttempt) {
                     updateApiStatus('gemini', 'limited');
-                    const log = chunkIndex >= 0 ? `Chunk ${chunkIndex + 1}` : 'Request';
-                    console.warn(`${log}: Rate limit hit. Falling back to 3.1 Flash-Lite...`);
+                    console.warn(`${logTag}: Rate limit hit. Falling back to 3.1 Flash-Lite...`);
                     updateApiStatus('gemini', 'lite');
                     response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`, requestOptions);
                 }
@@ -285,9 +294,9 @@
                 // 2. Handle Errors (!200 OK)
                 if (!response.ok) {
                     // If it's a 5xx Server Error (like 503) and we have retries left, pause and try again
-                    if (response.status >= 500 && response.status < 600 && attempt < maxRetries) {
+                    if (response.status >= 500 && response.status < 600 && !isLastAttempt) {
                         const delay = 1500 * (attempt + 1); // Waits 1.5s, then 3.0s
-                        console.warn(`Chunk ${chunkIndex >= 0 ? chunkIndex + 1 : 'N/A'}: Gemini returned ${response.status}. Retrying in ${delay}ms...`);
+                        console.warn(`${logTag}: Gemini returned ${response.status}. Retrying in ${delay}ms...`);
                         await new Promise(r => setTimeout(r, delay));
                         continue; // Loop back to the top and fetch again
                     }
