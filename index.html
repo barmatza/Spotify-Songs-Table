@@ -934,10 +934,9 @@
                 
                 // 1. Search user's library for an existing playlist with the exact same name
                 let existingPlaylist = null;
-                let nextUrl = getSpotifyUrl('/v1/me/playlists?limit=50');
+                let nextUrl = getSpotifyUrl(`/v1/me/playlists?limit=50`);
                 while (nextUrl && !existingPlaylist) {
                     const plData = await spotifyApiFetch(nextUrl);
-                    // Must be an exact name match AND owned by the current user so we have permission to overwrite it
                     existingPlaylist = plData.items.find(pl => pl.name.toLowerCase() === playlistName.toLowerCase() && pl.owner.id === me.id);
                     nextUrl = plData.next;
                 }
@@ -960,7 +959,7 @@
                 if (isOverwrite) {
                     await spotifyApiFetch(getSpotifyUrl(`/v1/playlists/${targetPlaylistId}`), 'PUT', { description: dynamicDesc });
                 } else {
-                    const newPl = await spotifyApiFetch(getSpotifyUrl(`/v1/users/${me.id}/playlists`), 'POST', { name: playlistName, description: dynamicDesc, public: false });
+                    const newPl = await spotifyApiFetch(getSpotifyUrl(`/v1/me/playlists`), 'POST', { name: playlistName, description: dynamicDesc, public: false });
                     targetPlaylistId = newPl.id;
                 }
                 
