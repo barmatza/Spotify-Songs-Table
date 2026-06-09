@@ -401,7 +401,7 @@
             return { selectedSongs, geminiKey };
         }
 
-        async function fetchGeminiData(prompt, geminiKey, batchIndex = -1, totalBatches = 1) {
+        async function fetchGeminiData(prompt, geminiKey, batchIndex = -1, totalBatches = 1, processId = 'system') {
             const requestOptions = {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1, responseMimeType: "application/json" } })
@@ -433,7 +433,7 @@
                     const logTag = batchIndex >= 0 ? `[Batch ${batchIndex + 1}/${totalBatches}]` : '[Request]';
                     const msg = `${logTag}: 3.5 Flash failed (${e.message}). Flipping switch to 3.1 Flash-Lite...`;
                     console.warn(msg);
-                    setStatus(msg, true); 
+                    setStatus(msg, true, processId); 
                     forceFlashLite = true; 
                 }
             }
@@ -447,7 +447,7 @@
                     if (attempt === 1) {
                         const msg = `${logTag}: 3.1 Flash-Lite failed (${e.message}). Retrying in 2.5s...`;
                         console.warn(msg);
-                        setStatus(msg, true); 
+                        setStatus(msg, true, processId); 
                         await new Promise(r => setTimeout(r, 2500));
                     } else {
                         throw new Error(`Gemini failed completely: ${e.message}`);
@@ -812,16 +812,20 @@
                 let songsToProcess = validation.selectedSongs;
                 if (validation.selectedSongs.length > 2500) { songsToProcess = validation.selectedSongs.slice(0, 2500); skippedSongs = validation.selectedSongs.slice(2500); }
 
-                let completedBatches = 0;
                 const chunks = chunkArray(songsToProcess, 500);
                 const fetchPromises = chunks.map(async (chunk, i) => {
+                    const batchId = `ai-filter-${i}`;
+                    setStatus(`AI Filter: Processing batch ${i + 1} of ${chunks.length}...`, false, batchId);
+                    
                     const prompt = `You are a music librarian. Filter based on: "${query}". ${maxResults ? `LIMIT: MAXIMUM of ${maxResults} IDs.` : ''}\nReturn a raw JSON array of ONLY the string IDs matching the vibe.\nSongs: ${JSON.stringify(chunk.map(s => ({id: s.id, name: s.name, artist: s.artist, genre: s.genre})))}`;
                     try { 
-                        const text = await fetchGeminiData(prompt, validation.geminiKey, i, chunks.length); 
-                        completedBatches++;
-                        setStatus(`AI Filter: Completed batch ${completedBatches} of ${chunks.length}...`, false, 'ai-filter');
+                        const text = await fetchGeminiData(prompt, validation.geminiKey, i, chunks.length, batchId); 
+                        setStatus(`AI Filter: Success! Batch ${i + 1} of ${chunks.length} completed.`, false, batchId);
                         return (text.match(/"([a-zA-Z0-9]+)"/g) || []).map(id => id.replace(/"/g, '')); 
-                    } catch { return []; }
+                    } catch { 
+                        setStatus(`AI Filter: Batch ${i + 1} failed.`, true, batchId);
+                        return []; 
+                    }
                 });
                 
                 let matchingIds = (await Promise.all(fetchPromises)).flat();
@@ -864,18 +868,22 @@
                 let songsToProcess = skippedSongs, newSkipped = [];
                 if (skippedSongs.length > 2500) { songsToProcess = skippedSongs.slice(0, 2500); newSkipped = skippedSongs.slice(2500); }
 
-                let completedBatches = 0;
                 const chunks = chunkArray(songsToProcess, 500);
                 const fetchPromises = chunks.map(async (chunk, i) => {
+                    const batchId = `ai-retry-${i}`;
                     const max = lastMaxResults ? (lastMaxResults - (customTabs.find(t=>t.id===latestAiTabId)?.songs.length||0)) : null;
                     if (max !== null && max <= 0) return [];
+                    
+                    setStatus(`Process Remaining: Processing batch ${i + 1} of ${chunks.length}...`, false, batchId);
                     const prompt = `You are a music librarian. Filter based on: "${queryToUse}". ${max ? `LIMIT: MAXIMUM of ${max} IDs.` : ''}\nReturn a raw JSON array of ONLY the string IDs matching the vibe.\nSongs: ${JSON.stringify(chunk.map(s => ({id: s.id, name: s.name, artist: s.artist})))}`;
                     try { 
-                        const text = await fetchGeminiData(prompt, geminiKey, i, chunks.length); 
-                        completedBatches++;
-                        setStatus(`Process Remaining: Completed batch ${completedBatches} of ${chunks.length}...`, false, 'ai-retry');
+                        const text = await fetchGeminiData(prompt, geminiKey, i, chunks.length, batchId); 
+                        setStatus(`Process Remaining: Success! Batch ${i + 1} of ${chunks.length} completed.`, false, batchId);
                         return (text.match(/"([a-zA-Z0-9]+)"/g) || []).map(id => id.replace(/"/g, '')); 
-                    } catch { return []; }
+                    } catch { 
+                        setStatus(`Process Remaining: Batch ${i + 1} failed.`, true, batchId);
+                        return []; 
+                    }
                 });
 
                 let matchingIds = (await Promise.all(fetchPromises)).flat();
@@ -947,20 +955,24 @@
             let fetchCount = 0;
 
             try {
-                let completedBatches = 0;
                 const chunks = chunkArray(artistsToProcess, 200);
                 const fetchPromises = chunks.map(async (chunk, index) => {
                     if (abortFetch) return {};
+                    const batchId = `ai-genre-${index}`;
+                    setStatus(`AI Genre: Processing batch ${index + 1} of ${chunks.length}...`, false, batchId);
+                    
                     const prompt = `Classify these artists into a broad genre (1-2 words). Return ONLY a JSON map of the exact "id" to the genre. No markdown.\nExample: {"123":"Pop"}\nArtists: ${JSON.stringify(chunk)}`;
                     try {
-                        const text = await fetchGeminiData(prompt, validation.geminiKey, index, chunks.length);
-                        completedBatches++;
-                        setStatus(`AI Genre Fetch: Completed batch ${completedBatches} of ${chunks.length}...`, false, 'ai-genre');
+                        const text = await fetchGeminiData(prompt, validation.geminiKey, index, chunks.length, batchId);
+                        setStatus(`AI Genre: Success! Batch ${index + 1} of ${chunks.length} completed.`, false, batchId);
                         
                         const jsonMatch = text.match(/\{[\s\S]*\}/);
                         if (!jsonMatch) return {}; 
                         return JSON.parse(jsonMatch[0]);
-                    } catch { return {}; }
+                    } catch { 
+                        setStatus(`AI Genre: Batch ${index + 1} failed.`, true, batchId);
+                        return {}; 
+                    }
                 });
                 
                 const masterMap = Object.assign({}, ...(await Promise.all(fetchPromises)));
@@ -987,20 +999,24 @@
             let fetchCount = 0;
 
             try {
-                let completedBatches = 0;
                 const chunks = chunkArray(songsToProcess, 200);
                 const fetchPromises = chunks.map(async (chunk, index) => {
                     if (abortFetch) return {};
+                    const batchId = `ai-lang-${index}`;
+                    setStatus(`AI Language: Processing batch ${index + 1} of ${chunks.length}...`, false, batchId);
+                    
                     const prompt = `Identify primary vocal language of these songs based on title/artist. Or "Instrumental". Return ONLY a JSON map of the exact "id" to language. No markdown.\nExample: {"123":"English"}\nSongs: ${JSON.stringify(chunk)}`;
                     try {
-                        const text = await fetchGeminiData(prompt, validation.geminiKey, index, chunks.length);
-                        completedBatches++;
-                        setStatus(`AI Language Fetch: Completed batch ${completedBatches} of ${chunks.length}...`, false, 'ai-lang');
+                        const text = await fetchGeminiData(prompt, validation.geminiKey, index, chunks.length, batchId);
+                        setStatus(`AI Language: Success! Batch ${index + 1} of ${chunks.length} completed.`, false, batchId);
                         
                         const jsonMatch = text.match(/\{[\s\S]*\}/);
                         if (!jsonMatch) return {}; 
                         return JSON.parse(jsonMatch[0]);
-                    } catch { return {}; }
+                    } catch { 
+                        setStatus(`AI Language: Batch ${index + 1} failed.`, true, batchId);
+                        return {}; 
+                    }
                 });
 
                 const masterMap = Object.assign({}, ...(await Promise.all(fetchPromises)));
