@@ -44,7 +44,7 @@
         .active-dot { background-color: #1DB954; box-shadow: 0 0 6px #1DB954; animation: pulse 1.5s infinite; }
         .error-dot { background-color: #ff4444; box-shadow: 0 0 6px #ff4444; }
         @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
-        #timer { font-family: monospace; background-color: #282828; color: #1ed760; padding: 5px 8px; border-radius: 4px; font-size: 0.9em; font-weight: bold; margin-top: 2px; }
+        #timer { font-family: monospace; background-color: #282828; color: #b3b3b3; padding: 4px 8px; border-radius: 4px; font-size: 0.9em; font-weight: bold; min-width: 70px; text-align: center; }
         
         .tabs { display: flex; gap: 15px; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px; overflow-x: auto; min-width: min-content; }
         .tab-btn { background-color: transparent; color: #b3b3b3; border: none; font-size: 16px; font-weight: bold; cursor: pointer; padding: 5px 10px; border-radius: 0; white-space: nowrap; flex-shrink: 0; }
@@ -111,7 +111,6 @@
         <div class="dashboard-layout">
             <div class="status-wrapper" style="margin-bottom: 0;">
                 <div id="status-container" class="status-container"></div>
-                <div id="timer" class="hidden">0.0s</div>
             </div>
             <div id="api-monitor" class="api-monitor hidden">
                 <div style="border-bottom: 1px solid #333; padding-bottom: 6px; margin-bottom: 10px; font-weight: bold; text-align: center; color: #fff;">API Health Monitor</div>
@@ -122,6 +121,10 @@
                 <div class="api-row">
                     <span class="api-label">Gemini API:</span>
                     <span id="gemini-status" class="api-status status-idle">IDLE</span>
+                </div>
+                <div class="api-row">
+                    <span class="api-label">Task Timer:</span>
+                    <span id="timer">READY</span>
                 </div>
             </div>
         </div>
@@ -508,13 +511,13 @@
         let loadingInterval, startTime;
         function startTimer() {
             forceFlashLite = false; 
-            timerBadge.classList.remove('hidden'); timerBadge.style.color = '#1ed760'; timerBadge.innerText = '0.0s'; startTime = Date.now();
+            timerBadge.style.color = '#1ed760'; timerBadge.innerText = '0.0s'; startTime = Date.now();
             loadingInterval = setInterval(() => timerBadge.innerText = `${((Date.now() - startTime) / 1000).toFixed(1)}s`, 100);
         }
         function stopTimer() {
             clearInterval(loadingInterval);
             if (startTime) { timerBadge.innerText = `Took ${((Date.now() - startTime) / 1000).toFixed(1)}s`; timerBadge.style.color = '#b3b3b3'; } 
-            else timerBadge.classList.add('hidden');
+            else { timerBadge.innerText = 'READY'; timerBadge.style.color = '#b3b3b3'; }
         }
         // Upgraded Async Tracker Engine
         function setStatus(msg, isError = false, processId = 'system') {
