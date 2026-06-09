@@ -926,16 +926,62 @@
             const txtF = t?.textQuery ?? searchInput.value.trim(), aiQ = t?.aiQuery ?? lastAiQuery;
             const dynamicDesc = aiQ && txtF ? `AI: "${aiQ}" | Text: "${txtF}"` : aiQ ? `AI: "${aiQ}"` : txtF ? `Text filter: "${txtF}"` : "Created via Spotify AI Filter.";
 
-            createPlaylistBtn.disabled = true; createPlaylistBtn.innerText = "Creating..."; startTimer(); setStatus("Building playlist...");
+            createPlaylistBtn.disabled = true; createPlaylistBtn.innerText = "Checking..."; startTimer(); setStatus("Checking existing playlists...");
 
             try {
                 const me = await spotifyApiFetch(getSpotifyUrl('/v1/me'));
-                const playlist = await spotifyApiFetch(getSpotifyUrl(`/v1/users/${me.id}/playlists`), 'POST', { name: playlistName, description: dynamicDesc, public: false });
                 
-                const uris = validation.selectedSongs.map(s => `spotify:track:${s.id}`);
-                for (const chunk of chunkArray(uris, 100)) await spotifyApiFetch(getSpotifyUrl(`/v1/playlists/${playlist.id}/tracks`), 'POST', { uris: chunk });
+                // 1. Search user's library for an existing playlist with the exact same name
+                let existingPlaylist = null;
+                let nextUrl = getSpotifyUrl('/v1/me/playlists?limit=50');
+                while (nextUrl && !existingPlaylist) {
+                    const plData = await spotifyApiFetch(nextUrl);
+                    // Must be an exact name match AND owned by the current user so we have permission to overwrite it
+                    existingPlaylist = plData.items.find(pl => pl.name.toLowerCase() === playlistName.toLowerCase() && pl.owner.id === me.id);
+                    nextUrl = plData.next;
+                }
 
-                setStatus(`Success! Playlist "${playlistName}" created.`);
+                let targetPlaylistId = null;
+                let isOverwrite = false;
+
+                // 2. Offer to Overwrite if found
+                if (existingPlaylist) {
+                    const confirmOverwrite = confirm(`A playlist named "${existingPlaylist.name}" already exists with ${existingPlaylist.tracks.total} tracks.\n\nDo you want to OVERWRITE it?\n(Click OK to overwrite, or Cancel to create a duplicate)`);
+                    if (confirmOverwrite) {
+                        targetPlaylistId = existingPlaylist.id;
+                        isOverwrite = true;
+                    }
+                }
+
+                setStatus(isOverwrite ? "Overwriting playlist..." : "Building playlist...");
+
+                // 3. Update or Create the Playlist metadata
+                if (isOverwrite) {
+                    await spotifyApiFetch(getSpotifyUrl(`/v1/playlists/${targetPlaylistId}`), 'PUT', { description: dynamicDesc });
+                } else {
+                    const newPl = await spotifyApiFetch(getSpotifyUrl(`/v1/users/${me.id}/playlists`), 'POST', { name: playlistName, description: dynamicDesc, public: false });
+                    targetPlaylistId = newPl.id;
+                }
+                
+                // 4. Populate Tracks
+                const uris = validation.selectedSongs.map(s => `spotify:track:${s.id}`);
+                const uriChunks = chunkArray(uris, 100);
+
+                if (isOverwrite && uriChunks.length > 0) {
+                    // A PUT request completely replaces all existing tracks with the first chunk
+                    await spotifyApiFetch(getSpotifyUrl(`/v1/playlists/${targetPlaylistId}/tracks`), 'PUT', { uris: uriChunks[0] });
+                    // POST appends any remaining chunks
+                    for (let i = 1; i < uriChunks.length; i++) {
+                        await spotifyApiFetch(getSpotifyUrl(`/v1/playlists/${targetPlaylistId}/tracks`), 'POST', { uris: uriChunks[i] });
+                    }
+                } else {
+                    // Creating new: Just POST all chunks sequentially
+                    for (const chunk of uriChunks) {
+                        await spotifyApiFetch(getSpotifyUrl(`/v1/playlists/${targetPlaylistId}/tracks`), 'POST', { uris: chunk });
+                    }
+                }
+
+                setStatus(`Success! Playlist "${playlistName}" ${isOverwrite ? 'overwritten' : 'created'}.`);
             } catch (e) { setStatus(`Playlist Error - ${e.message}`, true); } 
             finally { stopTimer(); createPlaylistBtn.disabled = false; createPlaylistBtn.innerText = "Create Playlist"; }
         });
