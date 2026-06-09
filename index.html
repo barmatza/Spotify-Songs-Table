@@ -1064,7 +1064,8 @@
                 if (t) {
                     baseName = t.name; // This is already perfectly formatted from the breadcrumbs!
                     if (t.breadcrumbs && t.breadcrumbs.length > 0) {
-                        dynamicDesc = t.breadcrumbs.map(b => `[${b.type}] ${b.text}`).join('\n');
+                        // Formats the description to exactly match the tab names
+                        dynamicDesc = t.breadcrumbs.map(b => `${b.text} [${b.type}]`).join(' - ');
                     }
                 }
             } else {
