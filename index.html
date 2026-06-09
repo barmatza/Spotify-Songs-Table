@@ -36,9 +36,15 @@
         th.sortable.sort-asc::after { content: '\25B2'; color: #1DB954; }
         th.sortable.sort-desc::after { content: '\25BC'; color: #1DB954; }
 
-        .status-wrapper { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-        #status { color: #b3b3b3; font-size: 0.9em; transition: color 0.3s; }
-        #timer { font-family: monospace; background-color: #282828; color: #1ed760; padding: 3px 8px; border-radius: 4px; font-size: 0.9em; font-weight: bold; }
+        .status-wrapper { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; min-height: 34px; }
+        .status-container { display: flex; flex-direction: column; gap: 6px; flex-grow: 1; }
+        .status-line { font-size: 0.9em; padding: 6px 12px; border-radius: 4px; background: #181818; color: #b3b3b3; display: flex; align-items: center; gap: 8px; transition: opacity 0.4s ease; border: 1px solid #333; width: fit-content; }
+        .status-line.error { color: #ff4444; border-color: #ff4444; background: rgba(255, 68, 68, 0.1); }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+        .active-dot { background-color: #1DB954; box-shadow: 0 0 6px #1DB954; animation: pulse 1.5s infinite; }
+        .error-dot { background-color: #ff4444; box-shadow: 0 0 6px #ff4444; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+        #timer { font-family: monospace; background-color: #282828; color: #1ed760; padding: 5px 8px; border-radius: 4px; font-size: 0.9em; font-weight: bold; margin-top: 2px; }
         
         .tabs { display: flex; gap: 15px; margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px; overflow-x: auto; min-width: min-content; }
         .tab-btn { background-color: transparent; color: #b3b3b3; border: none; font-size: 16px; font-weight: bold; cursor: pointer; padding: 5px 10px; border-radius: 0; white-space: nowrap; flex-shrink: 0; }
@@ -104,7 +110,7 @@
 
         <div class="dashboard-layout">
             <div class="status-wrapper" style="margin-bottom: 0;">
-                <div id="status">Please enter your credentials and log in.</div>
+                <div id="status-container" class="status-container"></div>
                 <div id="timer" class="hidden">0.0s</div>
             </div>
             <div id="api-monitor" class="api-monitor hidden">
@@ -245,7 +251,7 @@
         // ==========================================
         const clientIdInput = document.getElementById('client-id-input'), geminiKeyInput = document.getElementById('gemini-key-input');
         const setupSection = document.getElementById('setup-section'), loginBtn = document.getElementById('login-btn'), clearCacheBtn = document.getElementById('clear-cache-btn');
-        const statusText = document.getElementById('status'), timerBadge = document.getElementById('timer');
+        const statusContainer = document.getElementById('status-container'), timerBadge = document.getElementById('timer');
         const tabsContainer = document.getElementById('tabs-container'), tabMain = document.getElementById('tab-main'), tabRejected = document.getElementById('tab-rejected'), tabSkipped = document.getElementById('tab-skipped');
         const rejectedBadge = document.getElementById('rejected-badge'), skippedBadge = document.getElementById('skipped-badge');
         const skippedWarning = document.getElementById('skipped-warning'), processSkippedBtn = document.getElementById('process-skipped-btn');
@@ -350,7 +356,7 @@
             }
             updateActionTabsUI();
 
-            if (!abortFetch) setStatus(`${successMsg} ${fetchCount} items.` + (failedSongs.length ? ` ${failedSongs.length} failed.` : ''));
+            if (!abortFetch) setStatus(`${successMsg} ${fetchCount} items.` + (failedSongs.length ? ` ${failedSongs.length} failed.` : ''), false, opType);
             localStorage.setItem(CACHE_KEY, JSON.stringify(allFetchedSongs)); 
             toggleFetchUI(false); 
             updateApiStatus(opType === 'spotify-genre' ? 'spotify' : 'gemini', 'idle');
@@ -510,9 +516,33 @@
             if (startTime) { timerBadge.innerText = `Took ${((Date.now() - startTime) / 1000).toFixed(1)}s`; timerBadge.style.color = '#b3b3b3'; } 
             else timerBadge.classList.add('hidden');
         }
-        function setStatus(msg, isError = false) {
-            statusText.innerText = msg; statusText.style.color = isError ? "#ff4444" : "#b3b3b3";
-            if (isError) setTimeout(() => { statusText.style.color = "#b3b3b3"; }, 5000);
+        // Upgraded Async Tracker Engine
+        function setStatus(msg, isError = false, processId = 'system') {
+            let line = document.getElementById(`status-${processId}`);
+            if (!line) {
+                line = document.createElement('div');
+                line.id = `status-${processId}`;
+                line.className = 'status-line';
+                statusContainer.appendChild(line);
+            }
+
+            line.className = `status-line ${isError ? 'error' : ''}`;
+            line.innerHTML = `<span class="status-dot ${isError ? 'error-dot' : 'active-dot'}"></span> ${msg}`;
+
+            if (line.timeoutId) clearTimeout(line.timeoutId);
+            
+            // Auto-remove successes, failures, or generic system messages after 4s
+            const msgLower = msg.toLowerCase();
+            const isFinished = msgLower.includes('success') || msgLower.includes('failed') || msgLower.includes('aborted') || msgLower.includes('found') || msgLower.includes('appended') || msgLower.includes('reset');
+            
+            if (isFinished || isError || processId === 'system') {
+                line.timeoutId = setTimeout(() => {
+                    line.style.opacity = '0';
+                    setTimeout(() => line.remove(), 400); // Wait for fade transition
+                }, 4000);
+            } else {
+                line.style.opacity = '1'; // Keeps the line fully visible while actively tracking chunks
+            }
         }
 
         // ==========================================
@@ -789,7 +819,7 @@
                     try { 
                         const text = await fetchGeminiData(prompt, validation.geminiKey, i, chunks.length); 
                         completedBatches++;
-                        setStatus(`AI Filter: Completed batch ${completedBatches} of ${chunks.length}...`);
+                        setStatus(`AI Filter: Completed batch ${completedBatches} of ${chunks.length}...`, false, 'ai-filter');
                         return (text.match(/"([a-zA-Z0-9]+)"/g) || []).map(id => id.replace(/"/g, '')); 
                     } catch { return []; }
                 });
@@ -804,7 +834,7 @@
                 let tabName = getLineageName(`[AI] ${query}`);
                 latestAiTabId = createAndSwitchToTab(tabName, newFiltered, '', query);
                 
-                setStatus(`Found ${newFiltered.length} matches.` + (skippedSongs.length ? ` ${skippedSongs.length} skipped.` : ''));
+                setStatus(`Found ${newFiltered.length} matches.` + (skippedSongs.length ? ` ${skippedSongs.length} skipped.` : ''), false, 'ai-filter');
             } catch (e) { setStatus(`AI Filter Failed - ${e.message}`, true); } 
             finally { stopTimer(); updateApiStatus('gemini', 'idle'); aiFilterBtn.disabled = false; aiFilterBtn.innerText = "Filter with AI"; }
         });
@@ -843,7 +873,7 @@
                     try { 
                         const text = await fetchGeminiData(prompt, geminiKey, i, chunks.length); 
                         completedBatches++;
-                        setStatus(`Process Remaining: Completed batch ${completedBatches} of ${chunks.length}...`);
+                        setStatus(`Process Remaining: Completed batch ${completedBatches} of ${chunks.length}...`, false, 'ai-retry');
                         return (text.match(/"([a-zA-Z0-9]+)"/g) || []).map(id => id.replace(/"/g, '')); 
                     } catch { return []; }
                 });
@@ -857,7 +887,7 @@
                 rejectedSongs = [...rejectedSongs, ...newRejected]; skippedSongs = newSkipped;
                 const aiTab = customTabs.find(t => t.id === latestAiTabId);
                 if (aiTab) { aiTab.songs.push(...newFiltered); document.getElementById(`badge-${latestAiTabId}`).innerText = `(${aiTab.songs.length})`; switchTab(latestAiTabId); }
-                updateActionTabsUI(); setStatus(`Appended ${newFiltered.length} matches! ${skippedSongs.length} remaining.`);
+                updateActionTabsUI(); setStatus(`Appended ${newFiltered.length} matches! ${skippedSongs.length} remaining.`, false, 'ai-retry');
             } catch (e) { setStatus(`Batch Failed - ${e.message}`, true); } 
             finally { stopTimer(); updateApiStatus('gemini', 'idle'); processSkippedBtn.disabled = false; processSkippedBtn.innerText = "Process Remaining"; }
         });
@@ -892,7 +922,7 @@
                         document.querySelectorAll(`.genre-cell-${artistId}`).forEach(c => c.innerText = gText);
                         fetchCount++; if(currentDelay > 0) currentDelay -= 10;
                     }
-                    if (i % 5 === 0) setStatus(`Processed ${i + 1} of ${uniqueIds.length}`);
+                    if (i % 5 === 0) setStatus(`Processed ${i + 1} of ${uniqueIds.length}`, false, 'spotify-genre');
                     if (currentDelay > 0) await new Promise(r => setTimeout(r, Math.max(0, currentDelay)));
                 } catch(e) {}
             }
@@ -925,7 +955,7 @@
                     try {
                         const text = await fetchGeminiData(prompt, validation.geminiKey, index, chunks.length);
                         completedBatches++;
-                        setStatus(`AI Genre Fetch: Completed batch ${completedBatches} of ${chunks.length}...`);
+                        setStatus(`AI Genre Fetch: Completed batch ${completedBatches} of ${chunks.length}...`, false, 'ai-genre');
                         
                         const jsonMatch = text.match(/\{[\s\S]*\}/);
                         if (!jsonMatch) return {}; 
@@ -965,7 +995,7 @@
                     try {
                         const text = await fetchGeminiData(prompt, validation.geminiKey, index, chunks.length);
                         completedBatches++;
-                        setStatus(`AI Language Fetch: Completed batch ${completedBatches} of ${chunks.length}...`);
+                        setStatus(`AI Language Fetch: Completed batch ${completedBatches} of ${chunks.length}...`, false, 'ai-lang');
                         
                         const jsonMatch = text.match(/\{[\s\S]*\}/);
                         if (!jsonMatch) return {}; 
