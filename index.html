@@ -68,6 +68,23 @@
         input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: #1DB954; }
         .hidden { display: none !important; }
         .controls-container { display: flex; flex-direction: column; gap: 10px; }
+
+        /* Custom Modal Styling */
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0, 0, 0, 0.8); display: flex; justify-content: center; align-items: center; z-index: 9999; opacity: 0; pointer-events: none; transition: opacity 0.2s ease; }
+        .modal-overlay.active { opacity: 1; pointer-events: all; }
+        .modal-box { background: #282828; border: 1px solid #444; border-radius: 8px; padding: 25px; width: 90%; max-width: 420px; box-shadow: 0 8px 24px rgba(0,0,0,0.6); text-align: center; }
+        .modal-title { margin: 0 0 10px 0; font-size: 1.3em; color: #fff; }
+        .modal-message { margin: 0 0 20px 0; color: #b3b3b3; font-size: 0.95em; white-space: pre-wrap; line-height: 1.4; }
+        .modal-input { width: calc(100% - 24px); padding: 12px; margin-bottom: 20px; border-radius: 4px; border: 1px solid #555; background: #121212; color: white; font-size: 1em; display: none; }
+        .modal-input.active { display: inline-block; }
+        .modal-actions { display: flex; justify-content: center; gap: 12px; }
+        .modal-btn { padding: 10px 20px; border-radius: 50px; border: none; font-weight: bold; cursor: pointer; transition: background 0.2s; min-width: 100px; }
+        .modal-btn-cancel { background: transparent; border: 1px solid #b3b3b3; color: #fff; }
+        .modal-btn-cancel:hover { border-color: #fff; transform: scale(1.04); }
+        .modal-btn-confirm { background: #1DB954; color: black; }
+        .modal-btn-confirm:hover { background: #1ed760; transform: scale(1.04); }
+        .modal-btn-danger { background: transparent; border: 1px solid #e57373; color: #e57373; }
+        .modal-btn-danger:hover { background: rgba(229, 115, 115, 0.1); border-color: #ef5350; color: #ef5350; transform: scale(1.04); }
     </style>
 </head>
 <body>
@@ -169,6 +186,18 @@
         <tbody id="songs-body"></tbody>
     </table>
 
+    <div id="custom-modal" class="modal-overlay">
+        <div class="modal-box">
+            <h3 id="modal-title" class="modal-title">Title</h3>
+            <p id="modal-message" class="modal-message"></p>
+            <input type="text" id="modal-input" class="modal-input" autocomplete="off" />
+            <div class="modal-actions">
+                <button id="modal-cancel-btn" class="modal-btn modal-btn-cancel">Cancel</button>
+                <button id="modal-confirm-btn" class="modal-btn modal-btn-confirm">OK</button>
+            </div>
+        </div>
+    </div>
+
     <script>
         // ==========================================
         // 1. CONFIGURATION & STATE
@@ -228,6 +257,46 @@
         const stopFetchBtn = document.getElementById('stop-fetch-btn'), createPlaylistBtn = document.getElementById('create-playlist-btn'), selectionCountText = document.getElementById('selection-count');
         const table = document.getElementById('songs-table'), tbody = document.getElementById('songs-body'), apiMonitor = document.getElementById('api-monitor');
         const spotifyStatusBadge = document.getElementById('spotify-status'), geminiStatusBadge = document.getElementById('gemini-status');
+
+        // Custom Modal Elements
+        const modalOverlay = document.getElementById('custom-modal'), modalTitle = document.getElementById('modal-title'), modalMessage = document.getElementById('modal-message');
+        const modalInput = document.getElementById('modal-input'), modalCancelBtn = document.getElementById('modal-cancel-btn'), modalConfirmBtn = document.getElementById('modal-confirm-btn');
+
+        // Promise-based Modal Engine
+        function showCustomModal(options) {
+            return new Promise((resolve) => {
+                modalTitle.innerText = options.title || '';
+                modalMessage.innerText = options.message || '';
+                modalMessage.style.display = options.message ? 'block' : 'none';
+                
+                if (options.type === 'prompt') {
+                    modalInput.classList.add('active'); modalInput.value = options.defaultValue || '';
+                    setTimeout(() => modalInput.focus(), 100); 
+                } else {
+                    modalInput.classList.remove('active');
+                }
+
+                modalConfirmBtn.className = options.isDanger ? 'modal-btn modal-btn-danger' : 'modal-btn modal-btn-confirm';
+                modalConfirmBtn.innerText = options.confirmText || 'OK';
+
+                modalOverlay.classList.add('active');
+
+                const cleanup = () => {
+                    modalOverlay.classList.remove('active');
+                    modalConfirmBtn.removeEventListener('click', onConfirm);
+                    modalCancelBtn.removeEventListener('click', onCancel);
+                    modalInput.removeEventListener('keyup', onEnter);
+                };
+
+                const onConfirm = () => { cleanup(); resolve(options.type === 'prompt' ? modalInput.value.trim() : true); };
+                const onCancel = () => { cleanup(); resolve(options.type === 'prompt' ? null : false); };
+                const onEnter = (e) => { if (e.key === 'Enter') onConfirm(); };
+
+                modalConfirmBtn.addEventListener('click', onConfirm);
+                modalCancelBtn.addEventListener('click', onCancel);
+                if (options.type === 'prompt') modalInput.addEventListener('keyup', onEnter);
+            });
+        }
 
         // ==========================================
         // 3. REFACTORED UTILITY FUNCTIONS
@@ -924,7 +993,14 @@
             let baseName = (currentTab.startsWith('custom-') ? customTabs.find(t=>t.id===currentTab)?.name : (currentTab === 'ai' ? 'AI Results' : currentTab === 'rejected' ? 'Filtered Out' : currentTab === 'skipped' ? 'Unprocessed' : 'Main Library')) || 'AI Filtered';
             baseName = baseName.replace(/\[AI\]/gi, '').replace(/^[\s-]+|[\s-]+$/g, '').trim().replace(/\b\w+/g, txt => txt === txt.toUpperCase() && txt.length > 1 ? txt : txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase());
             
-            const playlistName = prompt("Enter a name:", `${baseName} [AI]`); if (!playlistName) return;
+            // Replaced native prompt with custom async modal
+            const playlistName = await showCustomModal({
+                type: 'prompt',
+                title: 'Name Your Playlist',
+                defaultValue: `${baseName} [AI]`,
+                confirmText: 'Continue'
+            });
+            if (!playlistName) return;
 
             const t = currentTab.startsWith('custom-') ? customTabs.find(x=>x.id===currentTab) : null;
             const txtF = t?.textQuery ?? searchInput.value.trim(), aiQ = t?.aiQuery ?? lastAiQuery;
@@ -949,10 +1025,17 @@
 
                 // 2. Offer to Overwrite if found
                 if (existingPlaylist) {
-                    // Bulletproof the item count extraction against unpredictable Spotify API responses
                     const itemCount = existingPlaylist.tracks?.total || existingPlaylist.items?.total || 0;
                     
-                    const confirmOverwrite = confirm(`A playlist named "${existingPlaylist.name}" already exists with ${itemCount} items.\n\nDo you want to OVERWRITE it?\n(Click OK to overwrite, or Cancel to create a duplicate)`);
+                    // Replaced native confirm with custom async modal
+                    const confirmOverwrite = await showCustomModal({
+                        type: 'confirm',
+                        title: 'Overwrite Playlist?',
+                        message: `A playlist named "${existingPlaylist.name}" already exists with ${itemCount} items.\n\nDo you want to overwrite it and replace all existing songs?`,
+                        confirmText: 'Overwrite',
+                        isDanger: true
+                    });
+
                     if (confirmOverwrite) {
                         targetPlaylistId = existingPlaylist.id;
                         isOverwrite = true;
