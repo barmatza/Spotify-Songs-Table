@@ -390,7 +390,10 @@
                 const errData = await response.json().catch(() => ({}));
                 throw new Error(errData.error?.message || `Spotify API Error: ${response.status}`);
             }
-            return response.json();
+            
+            // Gracefully handle empty responses (like PUT/DELETE success states)
+            const text = await response.text();
+            return text ? JSON.parse(text) : {};
         }
 
         function updateActionTabsUI() {
