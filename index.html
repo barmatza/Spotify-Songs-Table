@@ -610,15 +610,36 @@
         // ==========================================
         // 7. EVENTS & TABS LOGIC
         // ==========================================
+        
+        // Helper to sync selection state across all cloned arrays simultaneously
+        function syncSelectionState(songId, isChecked) {
+            [allFetchedSongs, rejectedSongs, skippedSongs, ...customTabs.map(t => t.songs)].forEach(list => {
+                const match = list.find(s => s.id === songId);
+                if (match) match.selected = isChecked;
+            });
+        }
+
         tbody.addEventListener('change', (e) => {
             if (e.target.classList.contains('song-checkbox')) {
-                const song = allFetchedSongs.find(s => s.id === e.target.getAttribute('data-id'));
-                if (song) song.selected = e.target.checked;
+                syncSelectionState(e.target.getAttribute('data-id'), e.target.checked);
                 updateView();
             }
         });
-        selectAllBtn.addEventListener('click', () => { currentlyDisplayedSongs.forEach(s => { const m = allFetchedSongs.find(ms => ms.id === s.id); if(m) m.selected = true; }); updateView(); });
-        selectNoneBtn.addEventListener('click', () => { allFetchedSongs.forEach(s => s.selected = false); updateView(); });
+
+        selectAllBtn.addEventListener('click', () => { 
+            // Selects all currently visible songs, updating them across all tabs
+            currentlyDisplayedSongs.forEach(s => syncSelectionState(s.id, true)); 
+            updateView(); 
+        });
+
+        selectNoneBtn.addEventListener('click', () => { 
+            // Forcibly scrubs the selected state from every single list in memory
+            [allFetchedSongs, rejectedSongs, skippedSongs, ...customTabs.map(t => t.songs)].forEach(list => {
+                list.forEach(s => s.selected = false);
+            });
+            updateView(); 
+        });
+
         viewSelectedBtn.addEventListener('click', () => { showingSelectedOnly = !showingSelectedOnly; viewSelectedBtn.classList.toggle('active'); viewSelectedBtn.innerText = showingSelectedOnly ? "Showing Selected Only" : "Show Selected Only"; updateView(); });
         tagsHelpBtn.addEventListener('click', () => tagsHelpPanel.classList.toggle('hidden'));
         stopFetchBtn.addEventListener('click', () => { abortFetch = true; stopFetchBtn.disabled = true; stopFetchBtn.innerText = "Stopping..."; });
