@@ -189,7 +189,7 @@
         let lastAiQuery = "", lastMaxResults = null, latestAiTabId = null; 
         let sortColumn = null, sortAscending = true, customTabCounter = 0;
         let currentTab = 'main'; 
-        let showingSelectedOnly = false, abortFetch = false; 
+        let showingSelectedOnly = false, abortFetch = false, forceFlashLite = false;
 
         // ==========================================
         // 2. DOM ELEMENTS
@@ -262,56 +262,63 @@
             return { selectedSongs, geminiKey };
         }
 
-        async function fetchGeminiData(prompt, geminiKey, chunkIndex = -1, maxRetries = 2) {
+        async function fetchGeminiData(prompt, geminiKey, batchIndex = -1, totalBatches = 1) {
             const requestOptions = {
                 method: 'POST', headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.1, responseMimeType: "application/json" } })
             };
 
-            // Loop allows us to retry failed transient requests (503, 500, 502)
-            for (let attempt = 0; attempt <= maxRetries; attempt++) {
-                const isLastAttempt = (attempt === maxRetries);
-                const model = isLastAttempt ? 'gemini-3.1-flash-lite' : 'gemini-3.5-flash';
-                const logTag = chunkIndex >= 0 ? `Chunk ${chunkIndex + 1}` : 'Request';
-
-                if (isLastAttempt) {
-                    console.warn(`${logTag}: Final retry. Forcing fallback to 3.1 Flash-Lite...`);
-                    updateApiStatus('gemini', 'lite');
-                } else {
-                    updateApiStatus('gemini', 'active');
+            const attemptFetch = async (model) => {
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`;
+                updateApiStatus('gemini', model.includes('lite') ? 'lite' : 'active');
+                
+                let response = await fetch(url, requestOptions);
+                
+                if (response.status === 429) {
+                    updateApiStatus('gemini', 'limited');
+                    throw new Error("Rate limit (429)"); 
+                }
+                if (!response.ok) {
+                    const errData = await response.json().catch(() => ({}));
+                    throw new Error(errData.error?.message || `Status ${response.status}`);
                 }
                 
-                let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${geminiKey}`, requestOptions);
-
-                // 1. Handle Rate Limits (429) by switching to the lighter model (if not already using it)
-                if (response.status === 429 && !isLastAttempt) {
-                    updateApiStatus('gemini', 'limited');
-                    console.warn(`${logTag}: Rate limit hit. Falling back to 3.1 Flash-Lite...`);
-                    updateApiStatus('gemini', 'lite');
-                    response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${geminiKey}`, requestOptions);
-                }
-
-                // 2. Handle Errors (!200 OK)
-                if (!response.ok) {
-                    // If it's a 5xx Server Error (like 503) and we have retries left, pause and try again
-                    if (response.status >= 500 && response.status < 600 && !isLastAttempt) {
-                        const delay = 1500 * (attempt + 1); // Waits 1.5s, then 3.0s
-                        console.warn(`${logTag}: Gemini returned ${response.status}. Retrying in ${delay}ms...`);
-                        await new Promise(r => setTimeout(r, delay));
-                        continue; // Loop back to the top and fetch again
-                    }
-                    
-                    // If it's a 4xx Client Error (bad prompt/key) OR we ran out of retries, throw it
-                    const errData = await response.json().catch(() => ({}));
-                    throw new Error(errData.error?.message || `Gemini API failed with status ${response.status}`);
-                }
-
-                // 3. Success!
                 const data = await response.json();
                 return data.candidates[0].content.parts[0].text;
+            };
+
+            // 1. Try 3.5 Flash (If the switch hasn't been flipped yet)
+            if (!forceFlashLite) {
+                try {
+                    return await attemptFetch('gemini-3.5-flash');
+                } catch (e) {
+                    const logTag = batchIndex >= 0 ? `[Batch ${batchIndex + 1}/${totalBatches}]` : '[Request]';
+                    const msg = `${logTag}: 3.5 Flash failed (${e.message}). Flipping switch to 3.1 Flash-Lite...`;
+                    console.warn(msg);
+                    setStatus(msg, true); // Push warning to UI
+                    forceFlashLite = true; 
+                }
+            }
+
+            // 2. Try 3.1 Flash-Lite (1 initial try + 1 retry = 2 total attempts)
+            for (let attempt = 1; attempt <= 2; attempt++) {
+                try {
+                    return await attemptFetch('gemini-3.1-flash-lite');
+                } catch (e) {
+                    const logTag = batchIndex >= 0 ? `[Batch ${batchIndex + 1}/${totalBatches} | Attempt ${attempt}/2]` : `[Attempt ${attempt}/2]`;
+                    
+                    if (attempt === 1) {
+                        const msg = `${logTag}: 3.1 Flash-Lite failed (${e.message}). Retrying in 2.5s...`;
+                        console.warn(msg);
+                        setStatus(msg, true); // Push warning to UI
+                        await new Promise(r => setTimeout(r, 2500));
+                    } else {
+                        throw new Error(`Gemini failed completely: ${e.message}`);
+                    }
+                }
             }
         }
-
+        
         async function spotifyApiFetch(url, method = 'GET', body = null) {
             const options = { method, headers: { 'Authorization': `Bearer ${accessToken}` } };
             if (body) {
@@ -361,6 +368,7 @@
 
         let loadingInterval, startTime;
         function startTimer() {
+            forceFlashLite = false; // Resets the AI fallback state for every new operation
             timerBadge.classList.remove('hidden'); timerBadge.style.color = '#1ed760'; timerBadge.innerText = '0.0s'; startTime = Date.now();
             loadingInterval = setInterval(() => timerBadge.innerText = `${((Date.now() - startTime) / 1000).toFixed(1)}s`, 100);
         }
@@ -632,11 +640,18 @@
                 let songsToProcess = validation.selectedSongs;
                 if (validation.selectedSongs.length > 2500) { songsToProcess = validation.selectedSongs.slice(0, 2500); skippedSongs = validation.selectedSongs.slice(2500); }
 
-                const fetchPromises = chunkArray(songsToProcess, 500).map(async (chunk, i) => {
+                let completedBatches = 0;
+                const chunks = chunkArray(songsToProcess, 500);
+                const fetchPromises = chunks.map(async (chunk, i) => {
                     const prompt = `You are a music librarian. Filter based on: "${query}". ${maxResults ? `LIMIT: MAXIMUM of ${maxResults} IDs.` : ''}\nReturn a raw JSON array of ONLY the string IDs matching the vibe.\nSongs: ${JSON.stringify(chunk.map(s => ({id: s.id, name: s.name, artist: s.artist, genre: s.genre})))}`;
-                    try { const text = await fetchGeminiData(prompt, validation.geminiKey, i); return (text.match(/"([a-zA-Z0-9]+)"/g) || []).map(id => id.replace(/"/g, '')); } catch { return []; }
+                    try { 
+                        const text = await fetchGeminiData(prompt, validation.geminiKey, i, chunks.length); 
+                        completedBatches++;
+                        setStatus(`AI Filter: Completed batch ${completedBatches} of ${chunks.length}...`);
+                        return (text.match(/"([a-zA-Z0-9]+)"/g) || []).map(id => id.replace(/"/g, '')); 
+                    } catch { return []; }
                 });
-
+                
                 let matchingIds = (await Promise.all(fetchPromises)).flat();
                 if (maxResults && matchingIds.length > maxResults) matchingIds = matchingIds.slice(0, maxResults);
 
@@ -673,11 +688,18 @@ latestAiTabId = `custom-${++customTabCounter}`;
                 let songsToProcess = skippedSongs, newSkipped = [];
                 if (skippedSongs.length > 2500) { songsToProcess = skippedSongs.slice(0, 2500); newSkipped = skippedSongs.slice(2500); }
 
-                const fetchPromises = chunkArray(songsToProcess, 500).map(async (chunk, i) => {
+                let completedBatches = 0;
+                const chunks = chunkArray(songsToProcess, 500);
+                const fetchPromises = chunks.map(async (chunk, i) => {
                     const max = lastMaxResults ? (lastMaxResults - (customTabs.find(t=>t.id===latestAiTabId)?.songs.length||0)) : null;
                     if (max !== null && max <= 0) return [];
                     const prompt = `You are a music librarian. Filter based on: "${queryToUse}". ${max ? `LIMIT: MAXIMUM of ${max} IDs.` : ''}\nReturn a raw JSON array of ONLY the string IDs matching the vibe.\nSongs: ${JSON.stringify(chunk.map(s => ({id: s.id, name: s.name, artist: s.artist})))}`;
-                    try { const text = await fetchGeminiData(prompt, geminiKey, i); return (text.match(/"([a-zA-Z0-9]+)"/g) || []).map(id => id.replace(/"/g, '')); } catch { return []; }
+                    try { 
+                        const text = await fetchGeminiData(prompt, geminiKey, i, chunks.length); 
+                        completedBatches++;
+                        setStatus(`Process Remaining: Completed batch ${completedBatches} of ${chunks.length}...`);
+                        return (text.match(/"([a-zA-Z0-9]+)"/g) || []).map(id => id.replace(/"/g, '')); 
+                    } catch { return []; }
                 });
 
                 let matchingIds = (await Promise.all(fetchPromises)).flat();
@@ -748,15 +770,19 @@ latestAiTabId = `custom-${++customTabCounter}`;
             let fetchCount = 0;
 
             try {
-                const fetchPromises = chunkArray(artistsToProcess, 200).map(async (chunk, index) => {
+                let completedBatches = 0;
+                const chunks = chunkArray(artistsToProcess, 200);
+                const fetchPromises = chunks.map(async (chunk, index) => {
                     if (abortFetch) return {};
                     const prompt = `Classify these artists into a broad genre (1-2 words). Return ONLY a JSON map of the exact "id" to the genre. No markdown.\nExample: {"123":"Pop"}\nArtists: ${JSON.stringify(chunk)}`;
                     try {
-                        const text = await fetchGeminiData(prompt, validation.geminiKey, index);
+                        const text = await fetchGeminiData(prompt, validation.geminiKey, index, chunks.length);
+                        completedBatches++;
+                        setStatus(`AI Genre Fetch: Completed batch ${completedBatches} of ${chunks.length}...`);
                         return JSON.parse(text.replace(/```json/gi, '').replace(/```/g, '').trim());
                     } catch { return {}; }
                 });
-
+                
                 const masterMap = Object.assign({}, ...(await Promise.all(fetchPromises)));
                 if (!abortFetch) {
                     for (const [id, genre] of Object.entries(masterMap)) {
@@ -781,11 +807,15 @@ latestAiTabId = `custom-${++customTabCounter}`;
             let fetchCount = 0;
 
             try {
-                const fetchPromises = chunkArray(songsToProcess, 200).map(async (chunk, index) => {
+                let completedBatches = 0;
+                const chunks = chunkArray(songsToProcess, 200);
+                const fetchPromises = chunks.map(async (chunk, index) => {
                     if (abortFetch) return {};
                     const prompt = `Identify primary vocal language of these songs based on title/artist. Or "Instrumental". Return ONLY a JSON map of the exact "id" to language. No markdown.\nExample: {"123":"English"}\nSongs: ${JSON.stringify(chunk)}`;
                     try {
-                        const text = await fetchGeminiData(prompt, validation.geminiKey, index);
+                        const text = await fetchGeminiData(prompt, validation.geminiKey, index, chunks.length);
+                        completedBatches++;
+                        setStatus(`AI Language Fetch: Completed batch ${completedBatches} of ${chunks.length}...`);
                         return JSON.parse(text.replace(/```json/gi, '').replace(/```/g, '').trim());
                     } catch { return {}; }
                 });
