@@ -953,7 +953,8 @@
             });
             if (artistsToProcess.length === 0) { endStatus("All selected have genres."); return toggleFetchUI(false); }
 
-            showStatus(`Fetching genres for ${artistsToProcess.length} artists via AI...`, 'ai-genre-main');
+            // Fixed ID to sync with the Unprocessed Tab logic
+            showStatus(`Fetching genres for ${artistsToProcess.length} artists via AI...`, 'ai-genre');
             let fetchCount = 0;
 
             try {
@@ -984,9 +985,10 @@
                         document.querySelectorAll(`.genre-cell-${id}`).forEach(c => c.innerText = genre); fetchCount++;
                     }
                 }
-            } catch (e) { endStatus("Error processing chunk.", true, 'ai-genre-main'); }
+            } catch (e) { endStatus("Error processing chunk.", true, 'ai-genre'); }
             
-            sweepFailuresAndFinish(validation.selectedSongs, 'genre', 'ai-genre-main', fetchCount, 'Success! Fetched genres via AI for');
+            // Fixed ID to sync with the Unprocessed Tab logic
+            sweepFailuresAndFinish(validation.selectedSongs, 'genre', 'ai-genre', fetchCount, 'Success! Fetched genres via AI for');
         });
 
         fetchLangAiBtn.addEventListener('click', async () => {
@@ -996,7 +998,8 @@
             const songsToProcess = validation.selectedSongs.filter(s => (!s.language || s.language === 'Loading...' || s.language === 'Unknown')).map(s => ({ id: s.id, name: s.name, artist: s.artist }));
             if (songsToProcess.length === 0) { endStatus("All selected have languages."); return toggleFetchUI(false); }
 
-            showStatus(`Fetching languages for ${songsToProcess.length} songs via AI...`, 'ai-lang-main');
+            // Fixed ID to sync with the Unprocessed Tab logic
+            showStatus(`Fetching languages for ${songsToProcess.length} songs via AI...`, 'ai-lang');
             let fetchCount = 0;
 
             try {
@@ -1027,9 +1030,10 @@
                         document.querySelectorAll(`.lang-cell-${id}`).forEach(c => c.innerText = lang); fetchCount++;
                     }
                 }
-            } catch (e) { endStatus("Error processing chunk.", true, 'ai-lang-main'); }
+            } catch (e) { endStatus("Error processing chunk.", true, 'ai-lang'); }
             
-            sweepFailuresAndFinish(validation.selectedSongs, 'language', 'ai-lang-main', fetchCount, 'Success! Fetched languages via AI for');
+            // Fixed ID to sync with the Unprocessed Tab logic
+            sweepFailuresAndFinish(validation.selectedSongs, 'language', 'ai-lang', fetchCount, 'Success! Fetched languages via AI for');
         });
 
         // ==========================================
