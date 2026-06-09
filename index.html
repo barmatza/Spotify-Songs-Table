@@ -823,7 +823,11 @@ latestAiTabId = `custom-${++customTabCounter}`;
                         const text = await fetchGeminiData(prompt, validation.geminiKey, index, chunks.length);
                         completedBatches++;
                         setStatus(`AI Genre Fetch: Completed batch ${completedBatches} of ${chunks.length}...`);
-                        return JSON.parse(text.replace(/```json/gi, '').replace(/```/g, '').trim());
+                        
+                        // Bulletproof extraction: grabs only the data from the first '{' to the last '}'
+                        const jsonMatch = text.match(/\{[\s\S]*\}/);
+                        if (!jsonMatch) return {}; 
+                        return JSON.parse(jsonMatch[0]);
                     } catch { return {}; }
                 });
                 
@@ -869,7 +873,11 @@ latestAiTabId = `custom-${++customTabCounter}`;
                         const text = await fetchGeminiData(prompt, validation.geminiKey, index, chunks.length);
                         completedBatches++;
                         setStatus(`AI Language Fetch: Completed batch ${completedBatches} of ${chunks.length}...`);
-                        return JSON.parse(text.replace(/```json/gi, '').replace(/```/g, '').trim());
+                        
+                        // Bulletproof extraction: grabs only the data from the first '{' to the last '}'
+                        const jsonMatch = text.match(/\{[\s\S]*\}/);
+                        if (!jsonMatch) return {}; 
+                        return JSON.parse(jsonMatch[0]);
                     } catch { return {}; }
                 });
 
