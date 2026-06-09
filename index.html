@@ -174,7 +174,8 @@
         // 1. CONFIGURATION & STATE
         // ==========================================
         const REDIRECT_URI = 'https://barmatza.github.io/Spotify-Songs-Table/'; 
-        const SCOPES = 'user-library-read playlist-modify-public playlist-modify-private';
+        // Added permissions to read the user's profile ID and scan their private playlists
+        const SCOPES = 'user-library-read playlist-modify-public playlist-modify-private user-read-private playlist-read-private';
         
         const CACHE_KEY = 'spotify_liked_songs';
         const CLIENT_ID_KEY = 'spotify_client_id';
