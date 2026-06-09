@@ -597,7 +597,6 @@
                 let tabName = searchInput.value.trim() || aiPromptInput.value.trim() || (showingSelectedOnly ? 'Selected Songs' : `Saved View ${customTabCounter}`);//MINE
                 if (currentTab !== 'main') tabName = `${customTabs.find(t => t.id === currentTab)?.name || currentTab} - ${tabName}`;//MINE
                 
-                    if (currentTab !== 'main') tabName = `${customTabs.find(t => t.id === currentTab)?.name || currentTab} - ${tabName}`;
                 customTabs.push({ id: latestAiTabId, name: `[AI] ${query}`, songs: newFiltered, aiQuery: query });
                 const btn = document.createElement('button'); btn.className = 'tab-btn'; btn.id = `tab-${latestAiTabId}`; btn.innerHTML = `[AI] ${tabName} <span style="font-size:0.8em;color:#888;" id="badge-${latestAiTabId}">(${newFiltered.length})</span> <span class="close-tab-btn" data-id="${latestAiTabId}">✖</span>`;
                 btn.addEventListener('click', (e) => { if (e.target.classList.contains('close-tab-btn')) { e.stopPropagation(); closeCustomTab(latestAiTabId); } else switchTab(latestAiTabId); });
