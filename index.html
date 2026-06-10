@@ -755,7 +755,21 @@
 
         viewSelectedBtn.addEventListener('click', () => { showingSelectedOnly = !showingSelectedOnly; viewSelectedBtn.classList.toggle('active'); viewSelectedBtn.innerText = showingSelectedOnly ? "Showing Selected Only" : "Show Selected Only"; updateView(); });
         tagsHelpBtn.addEventListener('click', () => tagsHelpPanel.classList.toggle('hidden'));
-        stopFetchBtn.addEventListener('click', () => { abortFetch = true; stopFetchBtn.disabled = true; stopFetchBtn.innerText = "Stopping..."; endStatus("Operation aborted by user.", true, "system"); });
+        stopFetchBtn.addEventListener('click', () => { 
+            abortFetch = true; 
+            stopFetchBtn.disabled = true; 
+            stopFetchBtn.innerText = "Stopping..."; 
+            
+            // Instantly sweep away all active tracking messages to clear the screen
+            document.querySelectorAll('.status-line').forEach(line => {
+                if (line.id !== 'status-system') {
+                    line.style.opacity = '0';
+                    setTimeout(() => line.remove(), 400);
+                }
+            });
+            
+            endStatus("Operation aborted by user.", true, "system"); 
+        });
         [searchInput, maxResultsInput].forEach(el => el.addEventListener('input', updateView));
 
         function switchTab(tabId) {
@@ -819,6 +833,10 @@
             const maxResults = (isNaN(rawMax) || rawMax <= 0) ? null : rawMax; 
             
             lastAiQuery = query; lastMaxResults = maxResults; aiFilterBtn.disabled = true; aiFilterBtn.innerText = "Thinking...";
+            
+            // Expose the global Stop button for this AI fetch
+            abortFetch = false; stopFetchBtn.classList.remove('hidden'); stopFetchBtn.disabled = false; stopFetchBtn.innerText = "Stop Fetching";
+            
             showStatus(`Sending ${validation.selectedSongs.length} selected songs to Gemini... Please wait.`, 'ai-filter-main'); startTimer();
 
             try {
@@ -829,25 +847,42 @@
 
                 const chunks = chunkArray(songsToProcess, 500);
                 const fetchPromises = chunks.map(async (chunk, i) => {
+                    if (abortFetch) return null; // Catch immediate aborts
                     const batchId = `ai-filter-${i}`;
                     showStatus(`AI Filter: Processing batch ${i + 1} of ${chunks.length}...`, batchId);
                     
                     const prompt = `You are a music librarian. Filter based on: "${query}". ${maxResults ? `LIMIT: MAXIMUM of ${maxResults} IDs.` : ''}\nReturn a raw JSON array of ONLY the string IDs matching the vibe.\nSongs: ${JSON.stringify(chunk.map(s => ({id: s.id, name: s.name, artist: s.artist, genre: s.genre})))}`;
                     try { 
                         const text = await fetchGeminiData(prompt, validation.geminiKey, i, chunks.length, batchId); 
+                        if (abortFetch) return null; // Catch mid-flight aborts
                         endStatus(`AI Filter: Success! Batch ${i + 1} of ${chunks.length} completed.`, false, batchId);
                         return (text.match(/"([a-zA-Z0-9]+)"/g) || []).map(id => id.replace(/"/g, '')); 
                     } catch { 
+                        if (abortFetch) return null;
                         endStatus(`AI Filter: Batch ${i + 1} failed.`, true, batchId);
                         return []; 
                     }
                 });
                 
-                let matchingIds = (await Promise.all(fetchPromises)).flat();
+                const results = await Promise.all(fetchPromises);
+                
+                let matchingIds = [];
+                let abortedIds = [];
+                
+                // Segregate successes from aborted chunks
+                results.forEach((res, i) => {
+                    if (res === null) abortedIds.push(...chunks[i].map(s => s.id));
+                    else matchingIds.push(...res);
+                });
+
                 if (maxResults && matchingIds.length > maxResults) matchingIds = matchingIds.slice(0, maxResults);
 
                 const newFiltered = songsToProcess.filter(s => matchingIds.includes(s.id));
-                rejectedSongs = songsToProcess.filter(s => !matchingIds.includes(s.id)); rejectedSongs.forEach(s => s.selected = false);
+                const newRejected = songsToProcess.filter(s => !matchingIds.includes(s.id) && !abortedIds.includes(s.id));
+                const newSkipped = songsToProcess.filter(s => abortedIds.includes(s.id));
+
+                rejectedSongs = newRejected; rejectedSongs.forEach(s => s.selected = false);
+                skippedSongs = [...skippedSongs, ...newSkipped];
                 
                 // Extract parent breadcrumbs and append the AI query
                 let parentBreadcrumbs = [];
@@ -860,9 +895,10 @@
                 
                 latestAiTabId = createAndSwitchToTab(tabName, newFiltered, '', query, newBreadcrumbs);
                 
-                endStatus(`Found ${newFiltered.length} matches.` + (skippedSongs.length ? ` ${skippedSongs.length} skipped.` : ''), false, 'ai-filter-main');
+                if (abortFetch) endStatus(`Aborted! Saved ${newFiltered.length} processed matches.`, false, 'ai-filter-main');
+                else endStatus(`Found ${newFiltered.length} matches.` + (skippedSongs.length ? ` ${skippedSongs.length} skipped.` : ''), false, 'ai-filter-main');
             } catch (e) { endStatus(`AI Filter Failed - ${e.message}`, true, 'ai-filter-main'); } 
-            finally { stopTimer(); updateApiStatus('gemini', 'idle'); aiFilterBtn.disabled = false; aiFilterBtn.innerText = "Filter with AI"; }
+            finally { stopTimer(); updateApiStatus('gemini', 'idle'); aiFilterBtn.disabled = false; aiFilterBtn.innerText = "Filter with AI"; stopFetchBtn.classList.add('hidden'); }
         });
 
         processSkippedBtn.addEventListener('click', async () => {
@@ -884,7 +920,12 @@
             const queryToUse = customTabs.find(t => t.id === latestAiTabId)?.aiQuery || lastAiQuery;
             if (!queryToUse) return alert("No AI prompt found for this batch.");
 
-            processSkippedBtn.disabled = true; processSkippedBtn.innerText = "Processing..."; showStatus("Processing skipped batch...", 'ai-retry-main'); startTimer();
+            processSkippedBtn.disabled = true; processSkippedBtn.innerText = "Processing..."; 
+            
+            // Expose the global Stop button for this Retry fetch
+            abortFetch = false; stopFetchBtn.classList.remove('hidden'); stopFetchBtn.disabled = false; stopFetchBtn.innerText = "Stop Fetching";
+            
+            showStatus("Processing skipped batch...", 'ai-retry-main'); startTimer();
 
             try {
                 let songsToProcess = skippedSongs, newSkipped = [];
@@ -892,6 +933,7 @@
 
                 const chunks = chunkArray(songsToProcess, 500);
                 const fetchPromises = chunks.map(async (chunk, i) => {
+                    if (abortFetch) return null; // Catch immediate aborts
                     const batchId = `ai-retry-${i}`;
                     const max = lastMaxResults ? (lastMaxResults - (customTabs.find(t=>t.id===latestAiTabId)?.songs.length||0)) : null;
                     if (max !== null && max <= 0) return [];
@@ -900,26 +942,45 @@
                     const prompt = `You are a music librarian. Filter based on: "${queryToUse}". ${max ? `LIMIT: MAXIMUM of ${max} IDs.` : ''}\nReturn a raw JSON array of ONLY the string IDs matching the vibe.\nSongs: ${JSON.stringify(chunk.map(s => ({id: s.id, name: s.name, artist: s.artist})))}`;
                     try { 
                         const text = await fetchGeminiData(prompt, geminiKey, i, chunks.length, batchId); 
+                        if (abortFetch) return null; // Catch mid-flight aborts
                         endStatus(`Process Remaining: Success! Batch ${i + 1} of ${chunks.length} completed.`, false, batchId);
                         return (text.match(/"([a-zA-Z0-9]+)"/g) || []).map(id => id.replace(/"/g, '')); 
                     } catch { 
+                        if (abortFetch) return null;
                         endStatus(`Process Remaining: Batch ${i + 1} failed.`, true, batchId);
                         return []; 
                     }
                 });
 
-                let matchingIds = (await Promise.all(fetchPromises)).flat();
+                const results = await Promise.all(fetchPromises);
+                
+                let matchingIds = [];
+                let abortedIds = [];
+                
+                // Segregate successes from aborted chunks
+                results.forEach((res, i) => {
+                    if (res === null) abortedIds.push(...chunks[i].map(s => s.id));
+                    else matchingIds.push(...res);
+                });
+
                 if (lastMaxResults) { const allowed = lastMaxResults - (customTabs.find(t=>t.id===latestAiTabId)?.songs.length||0); if (matchingIds.length > allowed) matchingIds = matchingIds.slice(0, allowed); }
 
                 const newFiltered = songsToProcess.filter(s => matchingIds.includes(s.id));
-                const newRejected = songsToProcess.filter(s => !matchingIds.includes(s.id)); newRejected.forEach(s => s.selected = false);
+                const newRejected = songsToProcess.filter(s => !matchingIds.includes(s.id) && !abortedIds.includes(s.id));
 
-                rejectedSongs = [...rejectedSongs, ...newRejected]; skippedSongs = newSkipped;
+                rejectedSongs = [...rejectedSongs, ...newRejected]; 
+                
+                // Keep aborted songs safely in the Unprocessed array
+                skippedSongs = [...newSkipped, ...songsToProcess.filter(s => abortedIds.includes(s.id))];
+                
                 const aiTab = customTabs.find(t => t.id === latestAiTabId);
                 if (aiTab) { aiTab.songs.push(...newFiltered); document.getElementById(`badge-${latestAiTabId}`).innerText = `(${aiTab.songs.length})`; switchTab(latestAiTabId); }
-                updateActionTabsUI(); endStatus(`Appended ${newFiltered.length} matches! ${skippedSongs.length} remaining.`, false, 'ai-retry-main');
+                
+                updateActionTabsUI(); 
+                if (abortFetch) endStatus(`Aborted! Appended ${newFiltered.length} matches. ${skippedSongs.length} remaining.`, false, 'ai-retry-main');
+                else endStatus(`Appended ${newFiltered.length} matches! ${skippedSongs.length} remaining.`, false, 'ai-retry-main');
             } catch (e) { endStatus(`Batch Failed - ${e.message}`, true, 'ai-retry-main'); } 
-            finally { stopTimer(); updateApiStatus('gemini', 'idle'); processSkippedBtn.disabled = false; processSkippedBtn.innerText = "Process Remaining"; }
+            finally { stopTimer(); updateApiStatus('gemini', 'idle'); processSkippedBtn.disabled = false; processSkippedBtn.innerText = "Process Remaining"; stopFetchBtn.classList.add('hidden'); }
         });
 
         // ==========================================
